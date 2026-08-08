@@ -18,7 +18,7 @@ from .muscle_memory import (
     MuscleMemoryVectorDB,
     seed_legacy_refactor,
 )
-from .production import ProductionMuscleMemory, run_workers_parallel, build_superstep_plan
+from .production import ProductionMuscleMemory, LLMExecutionClient
 import os
 from .quantum import (
     DEFAULT_PATHS,
@@ -128,6 +128,11 @@ class FlowChartCharterSystem:
         self.last_trust = False
         self.token_budget = 50_000
         self.token_spend = 0
+        # Live-Wire: always route ops through LLMExecutionClient
+        # (mock provider offline; real provider when FCC_LLM_PROVIDER set)
+        self.live_wire = os.environ.get("FCC_LIVE_WIRE", "1") != "0"
+        self.llm_client = LLMExecutionClient()
+        self.last_live_wire: Dict[str, Any] = {}
         self.memory_store.add(
             MuscleMemoryRecord(
                 charter_id="seed-migration",
@@ -432,14 +437,34 @@ class FlowChartCharterSystem:
             exec_path = (
                 path if path in ("path_A", "path_B", "path_lite") else "path_A"
             )
-            m = agent.execute_flow_unit(
-                f"{workload_name} via {path}",
-                rng=self.rng,
-                quality_bias=bias,
-                path=exec_path,
-                token_ceiling=ceiling,
-                expected_schema_ok=schema_ok_hint or accelerated,
-            )
+            # Live-Wire production path (TPC inject + Pydantic schema gate)
+            if self.live_wire and force_quality is None:
+                constraints = list(getattr(agent, "playbook_constraints", []))
+                if living.get("prompt_tweak"):
+                    constraints.append(str(living["prompt_tweak"]))
+                if trajectory is not None and trajectory.prompt_tweak:
+                    constraints.append(trajectory.prompt_tweak)
+                m = agent.execute_live(
+                    f"{workload_name} via {path}",
+                    path=exec_path,
+                    playbook_constraints=constraints or None,
+                )
+                collapse = {
+                    **collapse,
+                    "live_wire": True,
+                    "provider": getattr(
+                        agent.llm_client.bridge.config, "provider", "mock"
+                    ),
+                }
+            else:
+                m = agent.execute_flow_unit(
+                    f"{workload_name} via {path}",
+                    rng=self.rng,
+                    quality_bias=bias,
+                    path=exec_path,
+                    token_ceiling=ceiling,
+                    expected_schema_ok=schema_ok_hint or accelerated,
+                )
             if m:
                 collected.append(m)
                 agent_qualities.append(m.quality_score)
@@ -672,6 +697,8 @@ class FlowChartCharterSystem:
             "schema_audits": schema_results,
             "survival": survival_snaps,
             "phantom_spawned": phantom.name if phantom else None,
+            "live_wire": self.live_wire,
+            "llm_provider": self.llm_client.bridge.config.provider,
             "elastic": self.elastic.export(),
             "boss_prompt_loaded": bool(self.boss.system_prompt),
             "foundations_ref": (

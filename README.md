@@ -86,7 +86,17 @@ curl -s -X POST http://127.0.0.1:8090/workload/submit \
   -d '{"workload":"Legacy Code Refactor","context_entropy":0.35}'
 ```
 
-### Live-Wire LLM (optional)
+### Live-Wire LLM (default ON)
+
+Charter super-steps call `WorkerNode.execute_live` → `LLMExecutionClient` (TPC inject + Pydantic gate). Mock provider offline; set real keys for production.
+
+```bash
+export FCC_LIVE_WIRE=1          # default
+export FCC_LLM_PROVIDER=mock    # or xai | openai | gemini
+```
+
+### Live-Wire LLM (optional env)
+
 
 Set env to swap simulation for real model calls (Pydantic-validated returns):
 

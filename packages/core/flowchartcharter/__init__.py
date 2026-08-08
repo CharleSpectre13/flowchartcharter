@@ -116,6 +116,7 @@ from .living_playbook import (
     capability_map_from_path,
 )
 from .llm_bridge import LLMBridge, LLMNodeOutput, LLMBridgeConfig
+from .simulation_sandbox import SimulationSandbox, run_phase2_sandbox
 from .production import (
     LLMExecutionClient,
     LLMExecutionRequest,
@@ -251,7 +252,10 @@ __all__ = [
     "run_workers_parallel",
     "WorkerTask",
     "WorkerNode",
+    "SimulationSandbox",
+    "run_phase2_sandbox",
 ]
 
 
-__version__ = "1.3.0"
+
+__version__ = "1.3.1"

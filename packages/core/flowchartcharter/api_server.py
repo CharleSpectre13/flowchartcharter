@@ -8,6 +8,7 @@ Analytics Chief resident between requests (singleton lifespan).
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 import uuid
@@ -84,6 +85,9 @@ class WorkloadSubmitResponse(BaseModel):
     remediation_loops: int = 0
     flow_path_reused: Optional[List[str]] = None
     analytics: Optional[Dict[str, Any]] = None
+    live_wire: bool = True
+    llm_provider: str = "mock"
+    entanglement_mean: float = 0.0
     elapsed_ms: float
 
 
@@ -226,7 +230,7 @@ def create_app() -> FastAPI:
             "Submit workloads to the Boss Agent; query roster TPC; "
             "trigger Monday Sync and Analytics Chief 5-day protocol."
         ),
-        version="1.2.0",
+        version="1.3.1",
         lifespan=lifespan,
     )
 
@@ -257,7 +261,7 @@ def create_app() -> FastAPI:
         return HealthResponse(
             status="ok",
             engine="FlowChartCharterSystem",
-            version="1.2.0",
+            version="1.3.1",
             uptime_s=round(st.uptime_s, 3),
             days_ready=st.system.analytics.days_ready(),
             roster_size=len(st.system.roster),
@@ -295,7 +299,9 @@ def create_app() -> FastAPI:
         t0 = time.perf_counter()
 
         try:
-            result = st.system.execute_charter(
+            # Offload sync engine to thread pool — keeps event loop free
+            result = await asyncio.to_thread(
+                st.system.execute_charter,
                 body.workload,
                 context_entropy=body.context_entropy,
                 payload=body.payload or {"task": body.workload},
@@ -310,6 +316,12 @@ def create_app() -> FastAPI:
             ) from exc
 
         elapsed = (time.perf_counter() - t0) * 1000.0
+        # Mean entanglement risk across ops for telemetry
+        risks = [
+            float(a.termination_risk_index)
+            for a in st.system.roster
+            if not isinstance(a, BossAgent) and a.history
+        ]
         return WorkloadSubmitResponse(
             request_id=request_id,
             workload=str(result.get("workload", body.workload)),
@@ -324,6 +336,9 @@ def create_app() -> FastAPI:
             remediation_loops=int(result.get("remediation_loops", 0)),
             flow_path_reused=result.get("flow_path_reused"),
             analytics=result.get("analytics"),
+            live_wire=bool(result.get("live_wire", True)),
+            llm_provider=str(result.get("llm_provider") or "mock"),
+            entanglement_mean=round(sum(risks) / len(risks), 4) if risks else 0.0,
             elapsed_ms=round(elapsed, 2),
         )
 
@@ -362,7 +377,7 @@ def create_app() -> FastAPI:
             muscle_memory_records=len(system.muscle_db.storage),
             living_playbook_records=len(system.playbook.records),
             analytics=system.analytics.export(),
-            engine_version="1.2.0",
+            engine_version="1.3.1",
         )
 
     # ----- System controls -------------------------------------------------
@@ -375,7 +390,7 @@ def create_app() -> FastAPI:
     async def trigger_monday_sync() -> MondaySyncResponse:
         """Force GM Monday Morning Sync (closes analytics day + optional EOW)."""
         st = get_state()
-        result = st.system.downtime_sync()
+        result = await asyncio.to_thread(st.system.downtime_sync)
         return MondaySyncResponse(
             outcomes=dict(result.get("outcomes") or {}),
             dossier_driven=bool(result.get("dossier_driven")),
@@ -399,13 +414,15 @@ def create_app() -> FastAPI:
     ) -> AdvanceAnalyticsResponse:
         """Advance Analytics Chief by one day; optionally run 5-day audit."""
         st = get_state()
-        day = st.system.advance_analytics_day()
+        day = await asyncio.to_thread(st.system.advance_analytics_day)
         dossier_data: Optional[Dict[str, Any]] = None
         outcomes: Optional[Dict[str, str]] = None
         dossier_driven = False
 
         if run_eow_if_ready and st.system.analytics.workweek_complete():
-            eow = st.system.run_end_of_week_protocol(force=False)
+            eow = await asyncio.to_thread(
+                st.system.run_end_of_week_protocol, force=False
+            )
             dossier_data = eow.get("dossier")
             outcomes = eow.get("outcomes")
             dossier_driven = bool(eow.get("dossier_driven"))
@@ -430,7 +447,9 @@ def create_app() -> FastAPI:
     ) -> AdvanceAnalyticsResponse:
         """Explicit Analytics Chief end-of-week protocol."""
         st = get_state()
-        eow = st.system.run_end_of_week_protocol(force=force)
+        eow = await asyncio.to_thread(
+            st.system.run_end_of_week_protocol, force=force
+        )
         return AdvanceAnalyticsResponse(
             day_closed=st.system.analytics.day_counter - 1,
             days_ready=st.system.analytics.days_ready(),

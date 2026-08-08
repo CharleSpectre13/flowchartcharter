@@ -28,13 +28,15 @@ Graph elements (GraphRAG Local/Global/DRIFT) are **callable sub-flow tools** whe
 5. **Engineer exit / Coach Trust Hand-Off** — designed hand-off when quality gates pass
 
 ## Enterprise Layers (Required)
-- **Governance**: Executive Board & Boss Agent (GM) — budget, goals, downtime syncs
+- **Governance**: CEO, CFO, Board + Boss Agent (GM) — budget, goals, downtime syncs only
+- **Executive wire**: Strict JSON performance vectors only (see executive-comms-protocol skill). No free-form NL among executives.
 - **Charter**: CentralCharterGraph schema (LangGraph StateGraph + Pydantic)
 - **State**: Channel reducers (deterministic merge, no races)
 - **Execution**: BSP / Pregel super-step engine + Position Managers / Key Players
-- **Memory**: Shared Blackboard (MCP-style) for volunteer task binding
+- **Memory**: Shared Blackboard (MCP-style) for volunteer task binding + executive vectors
 - **Persistence**: Thread checkpointer (Postgres/Redis) for muscle-memory + recovery
 - **Talent**: Promotion / demotion / decommission + Monday Morning Sync
+- **Self-audit**: Rhythm Marker validators (see rhythm-marker-validator skill) before Blackboard commit
 
 ## Seven-Phase Lifecycle (ST-01 … ST-07)
 1. Charter Init & Intake (Board + Boss)
@@ -65,6 +67,8 @@ Default weights: α=0.4, β=0.3, γ=0.001, δ=0.2. Promote if F ≥ 1.2× benchm
 - advanced-agent-builder 5 subsystems + OWASP agentic controls
 - graph-engineering / graphrag-pipeline only as **sub-flow tools**
 - loop-engineer for downtime sync, reindex, and continuous learning loops
+- executive-comms-protocol for CEO/CFO/Board/GM strict JSON vectors
+- rhythm-marker-validator for ST-04 gates and self-audit before commit
 - impeccable for any Studio / console UI surfaces
 - Never let vector/graph retrieval become the default orchestration layer
 

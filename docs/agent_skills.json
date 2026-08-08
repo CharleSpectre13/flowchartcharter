@@ -1,0 +1,106 @@
+[
+  {
+    "name": "QueryMuscleMemory",
+    "description": "Replaces standard RAG. Embeds the current problem and queries a store of past successful FlowChart completions for the historical cheat code.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "current_state_vector": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Embedding / feature vector of the current job state"
+        },
+        "threshold": {
+          "type": "number",
+          "description": "Minimum cosine similarity to accept a precedent",
+          "default": 0.82
+        }
+      },
+      "required": [
+        "current_state_vector"
+      ]
+    }
+  },
+  {
+    "name": "EvaluateRhythmMarker",
+    "description": "Self-auditing tool. Validates intermediate work against expected schema. On failure, routes data back with the specific schema error.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "agent_output_json": {
+          "type": "object"
+        },
+        "expected_schema": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "agent_output_json",
+        "expected_schema"
+      ]
+    }
+  },
+  {
+    "name": "ExecuteQuantumCollapse",
+    "description": "Routing decision engine. Builds |\u03c8\u27e9 from muscle memory + context entropy, applies CFO budget constraint, collapses to one Flow Unit (confidence 1.0).",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "flow_options": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "context_entropy": {
+          "type": "number",
+          "description": "H_ctx \u2208 [0,1] uncertainty of current payload"
+        }
+      },
+      "required": [
+        "flow_options"
+      ]
+    }
+  },
+  {
+    "name": "TriggerMondayMorningSync",
+    "description": "Downtime RLAIF loop. Batch-process execution logs, re-weight Flow Unit success probabilities, promote/demote/fire by Fitness Score.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "telemetry_data": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "telemetry_data"
+      ]
+    }
+  },
+  {
+    "name": "AdjustCorporateRoster",
+    "description": "Dynamic talent management. Promote, demote, or fire an agent by id and optionally replace with an optimized persona.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "agent_id": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "PROMOTE",
+            "DEMOTE",
+            "FIRE"
+          ]
+        }
+      },
+      "required": [
+        "agent_id",
+        "action"
+      ]
+    }
+  }
+]

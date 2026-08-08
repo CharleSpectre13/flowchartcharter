@@ -23,10 +23,25 @@ from .quantum import (
     measure,
     reinforce,
     entanglement_score,
+    contextual_entropy,
+    apply_cfo_budget_matrix,
     SuperpositionState,
     PathAmplitude,
     MeasurementRecord,
+    DEFAULT_PATHS,
+    PATH_STANDARD,
+    PATH_CLEANSING,
+    PATH_LITE,
 )
+from .synergy import synergy_score, structural_divergence, handoff_synergy, mean_pair_synergy
+from .skills import (
+    AgentSkillRuntime,
+    MuscleMemoryStore,
+    MuscleMemoryRecord,
+    RosterAction,
+    init_boss_agent,
+)
+from .prompts import BOSS_AGENT_SYSTEM_PROMPT, BOSS_ACKNOWLEDGEMENT, AGENT_SKILL_SCHEMAS
 
 __all__ = [
     "ExecutionMetrics",
@@ -64,8 +79,26 @@ __all__ = [
     "measure",
     "reinforce",
     "entanglement_score",
+    "contextual_entropy",
+    "apply_cfo_budget_matrix",
     "SuperpositionState",
     "PathAmplitude",
     "MeasurementRecord",
+    "DEFAULT_PATHS",
+    "PATH_STANDARD",
+    "PATH_CLEANSING",
+    "PATH_LITE",
+    "synergy_score",
+    "structural_divergence",
+    "handoff_synergy",
+    "mean_pair_synergy",
+    "AgentSkillRuntime",
+    "MuscleMemoryStore",
+    "MuscleMemoryRecord",
+    "RosterAction",
+    "init_boss_agent",
+    "BOSS_AGENT_SYSTEM_PROMPT",
+    "BOSS_ACKNOWLEDGEMENT",
+    "AGENT_SKILL_SCHEMAS",
 ]
-__version__ = "0.4.0"
+__version__ = "0.5.0"

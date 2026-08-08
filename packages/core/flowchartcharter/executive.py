@@ -1,7 +1,8 @@
-"""CEO / CFO / Board — executive layer; intervenes only on sync or hard halt."""
+"""CEO / CFO / Board — executive layer; CFO applies budget matrix before collapse."""
 from __future__ import annotations
-from typing import Dict, List, Optional
+from typing import Dict, List, Mapping, Optional, Tuple
 from .agents import Agent, BossAgent
+from .quantum import DEFAULT_PATH_COSTS, PATH_LITE, apply_cfo_budget_matrix
 from .vectors import (
     StrategyVector,
     BudgetVector,
@@ -38,10 +39,14 @@ class CEOAgent(Agent):
 
 
 class CFOAgent(Agent):
+    """Token Economics Override — hard interrupt before Measurement (Collapse)."""
+
     def __init__(self, name: str = "CFO-Ledger"):
         super().__init__(name, "Chief Financial Officer", {"budget": 1.0, "general": 0.3})
         self.corporate_rank = 18.0
         self.talent_eligible = False
+        self.path_costs: Dict[str, float] = dict(DEFAULT_PATH_COSTS)
+        self.reserve_margin: float = 500.0  # keep headroom tokens
 
     def issue_budget(
         self,
@@ -59,6 +64,55 @@ class CFOAgent(Agent):
             cost_penalty_gamma=gamma,
             halt_if_over=token_spend > token_budget,
         )
+
+    def budget_constraint_matrix(
+        self,
+        *,
+        token_spend: int,
+        token_budget: int,
+        path_weights: Mapping[str, float],
+        path_costs: Optional[Mapping[str, float]] = None,
+    ) -> Dict[str, object]:
+        """Apply CFO matrix before wave-function collapse.
+
+        Returns adjusted weights, blocked paths, and whether lite was forced.
+        """
+        remaining = float(token_budget - token_spend)
+        costs = dict(path_costs or self.path_costs)
+        adjusted, blocked, forced = apply_cfo_budget_matrix(
+            dict(path_weights),
+            costs,
+            remaining_budget=remaining,
+            margin=self.reserve_margin,
+            force_lite_path=PATH_LITE,
+        )
+        return {
+            "type": "CFOBudgetMatrix",
+            "from": "CFO",
+            "remaining_budget": remaining,
+            "reserve_margin": self.reserve_margin,
+            "path_costs": costs,
+            "adjusted_weights": adjusted,
+            "blocked_paths": blocked,
+            "force_lite": forced,
+            "interrupt": bool(blocked or forced),
+        }
+
+    def pre_collapse_gate(
+        self,
+        *,
+        token_spend: int,
+        token_budget: int,
+        muscle_memory: Mapping[str, float],
+    ) -> Tuple[Dict[str, float], Dict[str, object]]:
+        """Convenience: return (weights_for_superposition, matrix_report)."""
+        report = self.budget_constraint_matrix(
+            token_spend=token_spend,
+            token_budget=token_budget,
+            path_weights=muscle_memory,
+        )
+        weights = dict(report["adjusted_weights"])  # type: ignore[arg-type]
+        return weights, report
 
 
 class BoardAgent(Agent):
@@ -103,12 +157,15 @@ class RhythmValidatorAgent(Agent):
         threshold: float = 0.90,
         remediation_loops: int = 0,
         schema_ok: bool = True,
+        qs: Optional[float] = None,
     ) -> RhythmAudit:
         issues: List[str] = []
         if quality < threshold:
             issues.append(f"quality {quality:.3f} < {threshold}")
         if not schema_ok:
             issues.append("schema invalid")
+        if qs is not None and qs < 0.95:
+            issues.append(f"Q_s {qs:.3f} < 0.95 schema synergy")
         if remediation_loops > 3:
             issues.append("remediation cap exceeded")
         passed = len(issues) == 0

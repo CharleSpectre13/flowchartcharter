@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Dict, List, Optional
 from .metrics import ExecutionMetrics
 from .fitness import fitness, INDUSTRY_BENCHMARK
+from .prompts import BOSS_AGENT_SYSTEM_PROMPT, BOSS_ACKNOWLEDGEMENT
 
 
 class AgentStatus(str, Enum):
@@ -21,11 +22,15 @@ class Agent:
         self.role = role
         self.history: List[ExecutionMetrics] = []
         self.status = AgentStatus.ACTIVE
-        self.muscle_memory_weights: Dict[str, float] = {"path_A": 1.0, "path_B": 1.0}
+        self.muscle_memory_weights: Dict[str, float] = {
+            "path_A": 1.0,
+            "path_B": 1.0,
+            "path_lite": 1.0,
+        }
         self.capability_vector = capability_vector or {"general": 1.0}
         self.corporate_rank = 1.0
         self.load = 0.0
-        self.talent_eligible = True  # executives / pure validators opt out
+        self.talent_eligible = True
 
     def execute_flow_unit(
         self,
@@ -33,14 +38,22 @@ class Agent:
         *,
         rng: Optional[random.Random] = None,
         quality_bias: float = 0.0,
+        path: str = "path_A",
     ) -> Optional[ExecutionMetrics]:
         if self.status not in (AgentStatus.ACTIVE, AgentStatus.PROMOTED):
             return None
         r = rng or random
-        cost = r.randint(100, 500)
-        time = r.uniform(0.5, 2.5)
-        quality = min(1.0, max(0.0, r.uniform(0.7, 1.0) + quality_bias))
-        synergy = r.uniform(0.8, 1.0)
+        # path-aware cost model (aligns with CFO path_costs)
+        if path == "path_lite":
+            cost = r.randint(60, 120)
+        elif path == "path_B":
+            cost = r.randint(280, 450)
+        else:
+            cost = r.randint(140, 280)
+        time = r.uniform(0.4, 2.2)
+        quality = min(1.0, max(0.0, r.uniform(0.72, 1.0) + quality_bias))
+        # cleansing path slightly better quality on messy jobs (encoded in bias by caller)
+        synergy = r.uniform(0.82, 1.0)
         metrics = ExecutionMetrics(cost, time, quality, synergy)
         self.history.append(metrics)
         self.load = min(1.0, self.load + 0.1)
@@ -50,7 +63,6 @@ class Agent:
         return fitness(self.history)
 
     def volunteer_score(self, task_embedding: Dict[str, float], temperature: float = 1.0) -> float:
-        """P(A_j, T_k) style activation: capability match × rank / (1+load)."""
         if self.status == AgentStatus.FIRED:
             return 0.0
         score = 0.0
@@ -62,11 +74,19 @@ class Agent:
 
 
 class BossAgent(Agent):
+    """General Manager — initialized with exact Head Coach system prompt."""
+
     def __init__(self, name: str):
         super().__init__(name, "General Manager (Boss)")
         self.corporate_rank = 10.0
         self.playbook: List[str] = []
         self.talent_eligible = False
+        self.system_prompt = BOSS_AGENT_SYSTEM_PROMPT
+        self.acknowledged = False
+
+    def acknowledge_directive(self) -> str:
+        self.acknowledged = True
+        return BOSS_ACKNOWLEDGEMENT
 
     def monday_morning_sync(
         self,
@@ -91,14 +111,21 @@ class BossAgent(Agent):
                 agent.corporate_rank = min(10.0, agent.corporate_rank + 1.0)
                 outcomes[agent.name] = "PROMOTED"
                 self.playbook.append(f"Promote {agent.name}: fitness={f:.3f}")
-            elif f < benchmark * 0.7:
+            elif f < benchmark * 0.55:
                 agent.status = AgentStatus.FIRED
                 outcomes[agent.name] = "FIRED"
                 self.playbook.append(f"Fire {agent.name}: fitness={f:.3f}")
+            elif f < benchmark * 0.75:
+                agent.status = AgentStatus.DEMOTED
+                agent.corporate_rank = max(0.5, agent.corporate_rank - 0.5)
+                outcomes[agent.name] = "DEMOTED"
+                self.playbook.append(f"Demote {agent.name}: fitness={f:.3f}")
             else:
                 agent.status = AgentStatus.ACTIVE
-                agent.muscle_memory_weights["path_A"] = max(
-                    0.1, agent.muscle_memory_weights.get("path_A", 1.0) + r.uniform(-0.1, 0.2)
-                )
+                for p in list(agent.muscle_memory_weights.keys()):
+                    agent.muscle_memory_weights[p] = max(
+                        0.1,
+                        agent.muscle_memory_weights.get(p, 1.0) + r.uniform(-0.05, 0.12),
+                    )
                 outcomes[agent.name] = "RETAINED"
         return outcomes

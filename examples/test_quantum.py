@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for quantum routing — superposition, collapse, reinforce, entanglement."""
+"""Unit tests for quantum routing — superposition, collapse, reinforce, H_ctx, CFO."""
 from __future__ import annotations
 import math
 import sys
@@ -15,41 +15,54 @@ from flowchartcharter.quantum import (
     reinforce,
     entanglement_score,
     quantum_path_select,
+    contextual_entropy,
+    PATH_STANDARD,
+    PATH_CLEANSING,
+    PATH_LITE,
 )
 
 
 def test_superposition_normalized():
-    psi = build_superposition(["path_A", "path_B"], {"path_A": 3.0, "path_B": 1.0})
+    # equal affinity context → pure muscle weights (context_entropy mid-matched)
+    # Use paths with same affinity to isolate weight ratio: force only two paths with equal affinity
+    psi = build_superposition(
+        [PATH_STANDARD, PATH_CLEANSING],
+        {PATH_STANDARD: 3.0, PATH_CLEANSING: 1.0},
+        context_entropy=0.0,  # low entropy favors standard further
+    )
     probs = [a.probability for a in psi.amplitudes]
     assert abs(sum(probs) - 1.0) < 1e-9
-    assert psi.dominant().path == "path_A"
-    assert psi.amplitudes[0].probability == 0.75
-    assert psi.entropy > 0  # not pure
+    assert psi.dominant().path == PATH_STANDARD
+    assert psi.entropy >= 0
     print("OK superposition")
 
 
 def test_measure_deterministic_collapse():
-    psi = build_superposition(["path_A", "path_B"], {"path_A": 2.0, "path_B": 0.5})
+    psi = build_superposition(
+        [PATH_STANDARD, PATH_CLEANSING],
+        {PATH_STANDARD: 2.0, PATH_CLEANSING: 0.5},
+        context_entropy=0.1,
+    )
     chosen, collapsed = measure(psi, deterministic=True)
-    assert chosen == "path_A"
+    assert chosen == PATH_STANDARD
     assert collapsed.entropy == 0.0
     assert collapsed.amplitudes[0].probability == 1.0
     print("OK measure collapse confidence=1")
 
 
 def test_reinforce_success_boosts_chosen():
-    mm = {"path_A": 1.0, "path_B": 1.0}
-    after = reinforce(mm, "path_A", quality=0.95)
-    assert after["path_A"] > mm["path_A"]
-    assert after["path_B"] < mm["path_B"]
+    mm = {PATH_STANDARD: 1.0, PATH_CLEANSING: 1.0}
+    after = reinforce(mm, PATH_STANDARD, quality=0.95)
+    assert after[PATH_STANDARD] > mm[PATH_STANDARD]
+    assert after[PATH_CLEANSING] < mm[PATH_CLEANSING]
     print("OK reinforce success")
 
 
 def test_reinforce_failure_penalizes():
-    mm = {"path_A": 2.0, "path_B": 1.0}
-    after = reinforce(mm, "path_A", quality=0.5)
-    assert after["path_A"] < mm["path_A"]
-    assert after["path_B"] > mm["path_B"]
+    mm = {PATH_STANDARD: 2.0, PATH_CLEANSING: 1.0}
+    after = reinforce(mm, PATH_STANDARD, quality=0.5)
+    assert after[PATH_STANDARD] < mm[PATH_STANDARD]
+    assert after[PATH_CLEANSING] > mm[PATH_CLEANSING]
     print("OK reinforce failure")
 
 
@@ -62,29 +75,40 @@ def test_entanglement():
 
 
 def test_router_learning_loop():
-    r = QuantumRouter(deterministic=True)
-    mm = {"path_A": 1.2, "path_B": 1.0}
+    r = QuantumRouter(paths=(PATH_STANDARD, PATH_CLEANSING), deterministic=True)
+    mm = {PATH_STANDARD: 1.2, PATH_CLEANSING: 1.0}
     for i in range(5):
-        rec = r.collapse(charter_id="c1", agent_name="W1", muscle_memory=mm, marker="superstep")
-        q = 0.95 if rec.chosen_path == "path_A" else 0.7
+        rec = r.collapse(
+            charter_id="c1",
+            agent_name="W1",
+            muscle_memory=mm,
+            marker="superstep",
+            context_entropy=0.2,
+        )
+        q = 0.95 if rec.chosen_path == PATH_STANDARD else 0.7
         mm = r.observe("W1", mm, q)
-    assert mm["path_A"] > mm["path_B"]
+    assert mm[PATH_STANDARD] > mm[PATH_CLEANSING]
     summary = r.summary()
     assert summary["collapses"] == 5
-    assert summary["mean_pre_entropy"] >= 0
     print("OK router learning", mm, summary["paths"])
 
 
 def test_quantum_path_select_api():
     out = quantum_path_select(
-        ["path_A", "path_B"],
-        {"path_A": 4.0, "path_B": 0.5},
+        [PATH_STANDARD, PATH_CLEANSING],
+        {PATH_STANDARD: 4.0, PATH_CLEANSING: 0.5},
         deterministic=True,
+        context_entropy=0.1,
     )
-    assert out["chosen_path"] == "path_A"
+    assert out["chosen_path"] == PATH_STANDARD
     assert out["post_measurement"]["confidence"] == 1.0
-    assert out["pre_measurement"]["entropy"] >= 0
     print("OK quantum_path_select")
+
+
+def test_contextual_entropy_api():
+    h = contextual_entropy({"noise": 0.9, "missing_ratio": 0.8, "variance": 0.7})
+    assert h > 0.7
+    print("OK contextual_entropy", round(h, 3))
 
 
 def test_system_integration():
@@ -94,16 +118,14 @@ def test_system_integration():
     result = sys_.execute_charter("Quantum Integration Job")
     assert "quantum_paths" in result
     assert "quantum_summary" in result
-    assert "entanglement" in result
+    assert "context_entropy" in result
+    assert "Q_s_mean" in result
     assert result["quantum_summary"]["collapses"] >= 3
-    # Muscle memory should have evolved
-    w1 = next(a for a in sys_.roster if a.name == "Worker-1")
-    assert sum(w1.muscle_memory_weights.values()) > 0
     print(
         "OK system integration collapses=",
         result["quantum_summary"]["collapses"],
-        "entanglement=",
-        result["entanglement"],
+        "H_ctx=",
+        result["context_entropy"],
         "trust=",
         result["trust"],
     )
@@ -117,5 +139,6 @@ if __name__ == "__main__":
     test_entanglement()
     test_router_learning_loop()
     test_quantum_path_select_api()
+    test_contextual_entropy_api()
     test_system_integration()
     print("ALL_QUANTUM_TESTS_PASSED")

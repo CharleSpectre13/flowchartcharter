@@ -1,10 +1,6 @@
 # Build & push flowchart-charter-engine to Docker Hub
-# Secrets required:
-#   DOCKERHUB_USERNAME  e.g. charlespectre
-#   DOCKERHUB_TOKEN     Docker Hub Access Token (not password)
-#
-# Trigger: Actions → Docker Hub Publish → Run workflow
-# Or: publish a GitHub Release
+# Preferred: repository secrets DOCKERHUB_USERNAME + DOCKERHUB_TOKEN
+# One-shot (phone): workflow_dispatch inputs username + token
 name: Docker Hub Publish
 
 on:
@@ -13,13 +9,21 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Image tag (default: package version from pyproject)"
+        description: "Image tag (default: pyproject version)"
         required: false
-        default: ""
+        default: "1.6.1"
       latest:
         description: "Also tag as latest"
         required: false
         default: "true"
+      username:
+        description: "Docker Hub username (optional if secret set)"
+        required: false
+        default: ""
+      token:
+        description: "Docker Hub access token (optional if secret set)"
+        required: false
+        default: ""
 
 jobs:
   docker:
@@ -29,6 +33,28 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve credentials
+        id: creds
+        env:
+          SECRET_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          SECRET_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          INPUT_USER: ${{ github.event.inputs.username }}
+          INPUT_TOKEN: ${{ github.event.inputs.token }}
+        run: |
+          U="${INPUT_USER:-$SECRET_USER}"
+          T="${INPUT_TOKEN:-$SECRET_TOKEN}"
+          if [ -z "$U" ] || [ -z "$T" ]; then
+            echo "Missing Docker Hub credentials. Set secrets DOCKERHUB_USERNAME/DOCKERHUB_TOKEN or pass username+token inputs."
+            exit 1
+          fi
+          echo "username=$U" >> "$GITHUB_OUTPUT"
+          echo "::add-mask::$T"
+          {
+            echo "token<<EOF"
+            echo "$T"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Read version from pyproject.toml
         id: ver
@@ -47,14 +73,14 @@ jobs:
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ steps.creds.outputs.username }}
+          password: ${{ steps.creds.outputs.token }}
 
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/flowchart-charter-engine
+          images: ${{ steps.creds.outputs.username }}/flowchart-charter-engine
           tags: |
             type=raw,value=${{ steps.ver.outputs.tag }}
             type=raw,value=latest,enable=${{ github.event_name == 'release' || github.event.inputs.latest == 'true' }}
@@ -73,6 +99,6 @@ jobs:
       - name: Summary
         run: |
           echo "### Docker Hub" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Image: \`${{ secrets.DOCKERHUB_USERNAME }}/flowchart-charter-engine\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Image: \`${{ steps.creds.outputs.username }}/flowchart-charter-engine\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Tags: \`${{ steps.ver.outputs.tag }}\`, \`latest\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Hub: https://hub.docker.com/r/${{ secrets.DOCKERHUB_USERNAME }}/flowchart-charter-engine" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Hub: https://hub.docker.com/r/${{ steps.creds.outputs.username }}/flowchart-charter-engine" >> "$GITHUB_STEP_SUMMARY"

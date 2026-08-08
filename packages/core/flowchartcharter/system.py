@@ -18,6 +18,8 @@ from .muscle_memory import (
     MuscleMemoryVectorDB,
     seed_legacy_refactor,
 )
+from .production import ProductionMuscleMemory, run_workers_parallel, build_superstep_plan
+import os
 from .quantum import (
     DEFAULT_PATHS,
     QuantumRouter,
@@ -60,8 +62,16 @@ class FlowChartCharterSystem:
             lr=0.12,
             path_costs=dict(self.executives.cfo.path_costs),
         )
-        self.muscle_db = MuscleMemoryVectorDB(quiet=True)
-        seed_legacy_refactor(self.muscle_db)
+        if os.environ.get("FCC_VECTOR_BACKEND", "memory").lower() in (
+            "qdrant", "pinecone", "production", "auto"
+        ):
+            self.muscle_db = ProductionMuscleMemory.from_env(quiet=True)
+            # seed via classic adapter if production has storage
+            if hasattr(self.muscle_db, "storage"):
+                seed_legacy_refactor(self.muscle_db)  # type: ignore[arg-type]
+        else:
+            self.muscle_db = MuscleMemoryVectorDB(quiet=True)
+            seed_legacy_refactor(self.muscle_db)
         self.memory_store = MuscleMemoryStore(self.muscle_db)
         self.playbook = LivingPlaybook(
             model_class=model_class,

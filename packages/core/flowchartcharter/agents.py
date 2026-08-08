@@ -6,6 +6,12 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from .fitness import INDUSTRY_BENCHMARK, fitness
+from .production import (
+    LLMExecutionClient,
+    LLMExecutionRequest,
+    apply_execution_to_agent,
+    WorkerTaskResult,
+)
 from .metrics import ExecutionMetrics
 from .prompts import BOSS_ACKNOWLEDGEMENT, BOSS_AGENT_SYSTEM_PROMPT
 from .survival import (
@@ -75,6 +81,13 @@ class Agent:
         self.generation: GenerationParameters = generation_params_for_risk(0.0)
         self.system_prompt: str = self._rebuild_prompt()
         self.cycle_counter: int = 0
+        self.llm_client = LLMExecutionClient()
+        self.entanglement_errors: int = 0
+        self.playbook_constraints: List[str] = [
+            "Typed Flow Unit schema is mandatory",
+            "Do not invent keys outside the contract",
+            "Prefer Muscle-Memory path when provided",
+        ]
 
     def _rebuild_prompt(self) -> str:
         return build_worker_system_prompt(
@@ -213,6 +226,52 @@ class Agent:
             notes=task[:80],
         )
         return metrics
+
+    def execute_live(
+        self,
+        workload: str,
+        *,
+        path: str = "path_A",
+        expected_output_keys: Optional[List[str]] = None,
+        playbook_constraints: Optional[List[str]] = None,
+    ) -> Optional[ExecutionMetrics]:
+        """Production path: LLMExecutionClient + schema gate + TPC inject.
+
+        On schema violation, entanglement_errors increments before Boss sees data.
+        """
+        if self.status not in (
+            AgentStatus.ACTIVE,
+            AgentStatus.PROMOTED,
+            AgentStatus.PHANTOM,
+        ):
+            if not self.is_phantom or self.status == AgentStatus.FIRED:
+                return None
+
+        constraints = playbook_constraints or self.playbook_constraints
+        req = LLMExecutionRequest(
+            workload=workload,
+            path=path,
+            termination_risk_index=self.termination_risk_index,
+            system_prompt=self.system_prompt,
+            playbook_constraints=constraints,
+            expected_output_keys=expected_output_keys
+            or ["result", "quality", "path", "tokens"],
+            agent_name=self.name,
+            role=self.role,
+        )
+        resp = self.llm_client.execute(req)
+        if resp.entanglement_errors_delta:
+            self.entanglement_errors += resp.entanglement_errors_delta
+        # apply via shared helper (history + ledger)
+        apply_execution_to_agent(
+            self,
+            WorkerTaskResult(
+                agent_name=self.name,
+                response=resp,
+                wall_ms=resp.latency_ms,
+            ),
+        )
+        return self.history[-1] if self.history else None
 
     def calculate_fitness(self) -> float:
         return fitness(self.history)
@@ -498,3 +557,7 @@ class BossAgent(Agent):
 
     def rehire_export(self) -> List[Dict[str, Any]]:
         return [d.to_dict() for d in self.rehire_log]
+
+
+# Architectural alias (reference engine naming)
+WorkerNode = Agent

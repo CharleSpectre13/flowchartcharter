@@ -1,6 +1,6 @@
 """FlowChartCharter core — execution-and-quality-first multi-agent state-charts."""
 from .metrics import ExecutionMetrics
-from .agents import Agent, BossAgent, AgentStatus
+from .agents import Agent, BossAgent, AgentStatus, WorkerNode
 from .blackboard import Blackboard, TaskRequest
 from .charter import FlowUnit, Charter, CharterState
 from .system import FlowChartCharterSystem
@@ -116,6 +116,17 @@ from .living_playbook import (
     capability_map_from_path,
 )
 from .llm_bridge import LLMBridge, LLMNodeOutput, LLMBridgeConfig
+from .production import (
+    LLMExecutionClient,
+    LLMExecutionRequest,
+    LLMExecutionResponse,
+    FlowUnitResultSchema,
+    validate_llm_output,
+    ProductionMuscleMemory,
+    EmbeddingProvider,
+    run_workers_parallel,
+    WorkerTask,
+)
 from .analytics import (
     AnalyticsChief,
     RosterRecommendationDossier,
@@ -230,6 +241,17 @@ __all__ = [
     "LLMBridge",
     "LLMNodeOutput",
     "LLMBridgeConfig",
+    "LLMExecutionClient",
+    "LLMExecutionRequest",
+    "LLMExecutionResponse",
+    "FlowUnitResultSchema",
+    "validate_llm_output",
+    "ProductionMuscleMemory",
+    "EmbeddingProvider",
+    "run_workers_parallel",
+    "WorkerTask",
+    "WorkerNode",
 ]
 
-__version__ = "1.2.0"
+
+__version__ = "1.3.0"

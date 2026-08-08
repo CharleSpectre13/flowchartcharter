@@ -4,7 +4,14 @@ from .agents import Agent, BossAgent, AgentStatus
 from .blackboard import Blackboard, TaskRequest
 from .charter import FlowUnit, Charter, CharterState
 from .system import FlowChartCharterSystem
-from .fitness import fitness, DEFAULT_ALPHA, DEFAULT_BETA, DEFAULT_GAMMA, DEFAULT_DELTA, COST_NORM
+from .fitness import (
+    fitness,
+    DEFAULT_ALPHA,
+    DEFAULT_BETA,
+    DEFAULT_GAMMA,
+    DEFAULT_DELTA,
+    COST_NORM,
+)
 from .vectors import (
     StrategyVector,
     BudgetVector,
@@ -13,9 +20,20 @@ from .vectors import (
     RhythmAudit,
     validate_executive_payload,
 )
-from .executive import CEOAgent, CFOAgent, BoardAgent, RhythmValidatorAgent, ExecutiveBoard
+from .executive import (
+    CEOAgent,
+    CFOAgent,
+    BoardAgent,
+    RhythmValidatorAgent,
+    ExecutiveBoard,
+)
 from .knowledge_graph import KnowledgeGraph, build_ontology
-from .foundations import FOUNDATIONS, foundations_table, blueprint_export, FLOW_UNIT_BLUEPRINT
+from .foundations import (
+    FOUNDATIONS,
+    foundations_table,
+    blueprint_export,
+    FLOW_UNIT_BLUEPRINT,
+)
 from .quantum import (
     QuantumRouter,
     quantum_path_select,
@@ -33,7 +51,12 @@ from .quantum import (
     PATH_CLEANSING,
     PATH_LITE,
 )
-from .synergy import synergy_score, structural_divergence, handoff_synergy, mean_pair_synergy
+from .synergy import (
+    synergy_score,
+    structural_divergence,
+    handoff_synergy,
+    mean_pair_synergy,
+)
 from .skills import (
     AgentSkillRuntime,
     MuscleMemoryStore,
@@ -41,7 +64,11 @@ from .skills import (
     RosterAction,
     init_boss_agent,
 )
-from .prompts import BOSS_AGENT_SYSTEM_PROMPT, BOSS_ACKNOWLEDGEMENT, AGENT_SKILL_SCHEMAS
+from .prompts import (
+    BOSS_AGENT_SYSTEM_PROMPT,
+    BOSS_ACKNOWLEDGEMENT,
+    AGENT_SKILL_SCHEMAS,
+)
 from .reference_engine import (
     TypedFlowUnit,
     AgentFitness,
@@ -51,6 +78,14 @@ from .reference_engine import (
     CFOHaltError,
     default_playbook,
     run_reference_simulation,
+)
+from .muscle_memory import (
+    ExecutionMemoryRecord,
+    MuscleMemoryVectorDB,
+    encode_state,
+    cosine_similarity,
+    seed_legacy_refactor,
+    run_muscle_memory_simulation,
 )
 
 __all__ = [
@@ -118,5 +153,11 @@ __all__ = [
     "CFOHaltError",
     "default_playbook",
     "run_reference_simulation",
+    "ExecutionMemoryRecord",
+    "MuscleMemoryVectorDB",
+    "encode_state",
+    "cosine_similarity",
+    "seed_legacy_refactor",
+    "run_muscle_memory_simulation",
 ]
-__version__ = "0.6.0"
+__version__ = "0.7.0"

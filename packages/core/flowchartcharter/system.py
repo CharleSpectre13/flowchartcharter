@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 import random
 from typing import Any, Dict, List, Optional, Sequence
+
 from .agents import Agent, BossAgent, AgentStatus
 from .blackboard import Blackboard, TaskRequest
 from .charter import Charter, FlowUnit
@@ -8,7 +10,11 @@ from .executive import ExecutiveBoard
 from .foundations import blueprint_export
 from .knowledge_graph import KnowledgeGraph
 from .metrics import ExecutionMetrics
-from .prompts import BOSS_AGENT_SYSTEM_PROMPT
+from .muscle_memory import (
+    ExecutionMemoryRecord,
+    MuscleMemoryVectorDB,
+    seed_legacy_refactor,
+)
 from .quantum import (
     DEFAULT_PATHS,
     QuantumRouter,
@@ -16,11 +22,11 @@ from .quantum import (
     quantum_path_select,
 )
 from .skills import AgentSkillRuntime, MuscleMemoryRecord, MuscleMemoryStore, init_boss_agent
-from .synergy import handoff_synergy, mean_pair_synergy
+from .synergy import mean_pair_synergy
 
 
 class FlowChartCharterSystem:
-    """Facade: ST-01…ST-07 + Tensor Routing + Agent Skills + CFO gate + Brain-1 KG."""
+    """Facade: ST-01…ST-07 + Tensor Routing + Muscle-Memory VDB + Skills."""
 
     PATHS = DEFAULT_PATHS
 
@@ -45,20 +51,41 @@ class FlowChartCharterSystem:
             lr=0.12,
             path_costs=dict(self.executives.cfo.path_costs),
         )
-        self.memory_store = MuscleMemoryStore()
+        self.muscle_db = MuscleMemoryVectorDB(quiet=True)
+        seed_legacy_refactor(self.muscle_db)
+        self.memory_store = MuscleMemoryStore(self.muscle_db)
         self.roster: List[Agent] = [
-            Agent("Worker-1", "Key Player - Data Extraction", {"extraction": 1.0, "general": 0.5}),
-            Agent("Worker-2", "Key Player - Validation", {"validation": 1.0, "general": 0.5}),
-            Agent("Worker-3", "Position Manager - Synthesizer", {"synthesis": 1.0, "general": 0.6}),
+            Agent(
+                "Worker-1",
+                "Key Player - Data Extraction",
+                {"extraction": 1.0, "general": 0.5},
+            ),
+            Agent(
+                "Worker-2",
+                "Key Player - Validation",
+                {"validation": 1.0, "general": 0.5},
+            ),
+            Agent(
+                "Worker-3",
+                "Position Manager - Synthesizer",
+                {"synthesis": 1.0, "general": 0.6},
+            ),
             Agent("Auditor-1", "Audit Manager", {"audit": 1.0, "general": 0.4}),
             self.executives.validator,
         ]
-        self.roster[0].muscle_memory_weights = {"path_A": 1.4, "path_B": 0.9, "path_lite": 0.8}
-        self.roster[1].muscle_memory_weights = {"path_A": 1.0, "path_B": 1.2, "path_lite": 0.9}
-        self.roster[2].muscle_memory_weights = {"path_A": 1.5, "path_B": 0.7, "path_lite": 1.0}
+        self.roster[0].muscle_memory_weights = {
+            "path_A": 1.4, "path_B": 0.9, "path_lite": 0.8,
+        }
+        self.roster[1].muscle_memory_weights = {
+            "path_A": 1.0, "path_B": 1.2, "path_lite": 0.9,
+        }
+        self.roster[2].muscle_memory_weights = {
+            "path_A": 1.5, "path_B": 0.7, "path_lite": 1.0,
+        }
         self.skills = AgentSkillRuntime(
             router=self.router,
             store=self.memory_store,
+            db=self.muscle_db,
             boss=self.boss,
             roster=self.roster,
         )
@@ -67,7 +94,7 @@ class FlowChartCharterSystem:
         self.last_trust = False
         self.token_budget = 50_000
         self.token_spend = 0
-        # seed a few successful precedents
+        # Additional seed precedents
         self.memory_store.add(
             MuscleMemoryRecord(
                 charter_id="seed-migration",
@@ -119,18 +146,24 @@ class FlowChartCharterSystem:
         if agent.status not in (AgentStatus.ACTIVE, AgentStatus.PROMOTED):
             return False
         role = agent.role
-        if any(x in role for x in ("Audit", "Validator", "Chief", "Board", "General Manager")):
+        if any(
+            x in role
+            for x in ("Audit", "Validator", "Chief", "Board", "General Manager")
+        ):
             return False
         return True
 
     def _payload_entropy(self, workload_name: str) -> float:
-        """Derive H_ctx from workload name hash + optional noise (deterministic per seed)."""
-        # Keywords imply messiness
         lower = workload_name.lower()
         base = 0.25
-        if any(k in lower for k in ("security", "audit", "messy", "legacy", "migration")):
+        if any(
+            k in lower
+            for k in ("security", "audit", "messy", "legacy", "migration")
+        ):
             base = 0.72
-        elif any(k in lower for k in ("api", "integration", "realtime", "telemetry")):
+        elif any(
+            k in lower for k in ("api", "integration", "realtime", "telemetry")
+        ):
             base = 0.45
         noise = self.rng.uniform(-0.08, 0.08)
         return max(0.0, min(1.0, base + noise))
@@ -143,14 +176,18 @@ class FlowChartCharterSystem:
         context_entropy: Optional[float] = None,
         payload: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """ST-01..ST-06 with H_ctx routing, CFO pre-collapse gate, skills, RhythmAudit."""
+        """ST-01..ST-06 with Muscle-Memory lookup before quantum collapse."""
         self.router.history.clear()
         self.router._pending.clear()
 
         h_ctx = (
             context_entropy
             if context_entropy is not None
-            else contextual_entropy(payload) if payload else self._payload_entropy(workload_name)
+            else (
+                contextual_entropy(payload)
+                if payload
+                else self._payload_entropy(workload_name)
+            )
         )
 
         charter = Charter(
@@ -164,24 +201,50 @@ class FlowChartCharterSystem:
                 FlowUnit("ST-06", "Synthesize", "handoff"),
             ],
         )
-        strategy = self.executives.ceo.issue_strategy(workload_name, budget_cap_tokens=self.token_budget)
+        strategy = self.executives.ceo.issue_strategy(
+            workload_name, budget_cap_tokens=self.token_budget
+        )
         self.blackboard.post_vector(strategy)
         self.blackboard.active_jobs.append(workload_name)
         self.blackboard.post(
-            TaskRequest("t-extract", f"{workload_name}:extract", {"extraction": 1.0, "general": 0.2})
+            TaskRequest(
+                "t-extract",
+                f"{workload_name}:extract",
+                {"extraction": 1.0, "general": 0.2},
+            )
         )
         self.blackboard.post(
-            TaskRequest("t-validate", f"{workload_name}:validate", {"validation": 1.0, "general": 0.2})
+            TaskRequest(
+                "t-validate",
+                f"{workload_name}:validate",
+                {"validation": 1.0, "general": 0.2},
+            )
         )
         self.blackboard.post(
-            TaskRequest("t-synth", f"{workload_name}:synth", {"synthesis": 1.0, "general": 0.2})
+            TaskRequest(
+                "t-synth",
+                f"{workload_name}:synth",
+                {"synthesis": 1.0, "general": 0.2},
+            )
         )
 
         assignments = self.blackboard.volunteer_bind(self.roster)
 
-        # Muscle-memory precedent for this workload state vector
         state_vec = [h_ctx, 1.0 - h_ctx, 0.5, strategy.priority]
-        precedent = self.skills.QueryMuscleMemory(state_vec, threshold=0.75)
+        payload_for_mm = payload or {
+            "task": workload_name,
+            "h_ctx": h_ctx,
+            "priority": strategy.priority,
+        }
+        precedent = self.skills.QueryMuscleMemory(
+            state_vec, threshold=0.70, payload=payload_for_mm
+        )
+        # Direct Vector DB query (full trajectory + cheat code)
+        trajectory = self.muscle_db.query_muscle_memory(
+            payload_for_mm,
+            similarity_threshold=0.70,
+            state_vector=state_vec,
+        )
 
         collected: List[ExecutionMetrics] = []
         path_trace: Dict[str, Any] = {}
@@ -189,14 +252,13 @@ class FlowChartCharterSystem:
         cfo_reports: List[Dict[str, Any]] = []
         schema_results: List[Dict[str, Any]] = []
         divergences: List[float] = []
-
         remaining = float(self.token_budget - self.token_spend)
+        accelerated = trajectory is not None
 
         for agent in self.roster:
             if not self._is_ops(agent):
                 continue
 
-            # CFO budget matrix before collapse
             _, cfo_report = self.executives.cfo.pre_collapse_gate(
                 token_spend=self.token_spend + self._token_sum(collected),
                 token_budget=self.token_budget,
@@ -204,43 +266,64 @@ class FlowChartCharterSystem:
             )
             cfo_reports.append({"agent": agent.name, **cfo_report})
 
-            # Skill: ExecuteQuantumCollapse
-            collapse = self.skills.ExecuteQuantumCollapse(
-                list(self.PATHS),
-                context_entropy=h_ctx,
-                muscle_memory=agent.muscle_memory_weights,
-                agent_name=agent.name,
-                charter_id=workload_name,
-                path_costs=self.executives.cfo.path_costs,
-                remaining_budget=remaining - self._token_sum(collected),
-                margin=self.executives.cfo.reserve_margin,
-            )
-            path = str(collapse["chosen_path"])
+            if accelerated and trajectory is not None:
+                # Muscle-Memory HIT: reuse first unit of verified path
+                path = trajectory.successful_flow_path[0]
+                # Map playbook ids to path_A/B/lite when needed
+                if path not in self.PATHS and not path.startswith("path_"):
+                    path = "path_A" if h_ctx < 0.5 else "path_B"
+                collapse = {
+                    "chosen_path": path,
+                    "source": "muscle_memory",
+                    "memory_id": trajectory.memory_id,
+                    "prompt_tweak": trajectory.prompt_tweak,
+                    "flow_path": list(trajectory.successful_flow_path),
+                    "post_measurement": {"confidence": 1.0, "entropy": 0.0},
+                    "pre_measurement": {
+                        "entropy": 0.0,
+                        "amplitudes": [],
+                    },
+                    "context_entropy": h_ctx,
+                    "cfo_forced": False,
+                }
+            else:
+                collapse = self.skills.ExecuteQuantumCollapse(
+                    list(self.PATHS),
+                    context_entropy=h_ctx,
+                    muscle_memory=agent.muscle_memory_weights,
+                    agent_name=agent.name,
+                    charter_id=workload_name,
+                    path_costs=self.executives.cfo.path_costs,
+                    remaining_budget=remaining - self._token_sum(collected),
+                    margin=self.executives.cfo.reserve_margin,
+                )
+                path = str(collapse["chosen_path"])
 
-            # Bias quality: cleansing path better when H_ctx high
             bias = 0.0 if force_quality is None else (force_quality - 0.85)
             if path == "path_B" and h_ctx >= 0.55:
                 bias += 0.06
             elif path == "path_A" and h_ctx < 0.4:
                 bias += 0.04
             elif path == "path_lite":
-                bias -= 0.03  # cheaper but slightly lower quality
+                bias -= 0.03
+            if accelerated:
+                bias += 0.05  # cheat-code acceleration quality bump
 
             m = agent.execute_flow_unit(
                 f"{workload_name} via {path}",
                 rng=self.rng,
                 quality_bias=bias,
-                path=path,
+                path=path if path in ("path_A", "path_B", "path_lite") else "path_A",
             )
             if m:
                 collected.append(m)
                 agent_qualities.append(m.quality_score)
-                agent.muscle_memory_weights = self.router.observe(
-                    agent.name,
-                    agent.muscle_memory_weights,
-                    m.quality_score,
-                )
-                # Simulate schema hand-off between agents
+                if not accelerated:
+                    agent.muscle_memory_weights = self.router.observe(
+                        agent.name,
+                        agent.muscle_memory_weights,
+                        m.quality_score,
+                    )
                 output = {
                     "result": "ok",
                     "quality": m.quality_score,
@@ -253,20 +336,27 @@ class FlowChartCharterSystem:
                     "path": "path_A",
                     "tokens": 100,
                 }
-                # intentional: tokens/path types match; all keys present → D≈0
                 eval_rm = self.skills.EvaluateRhythmMarker(output, expected)
                 schema_results.append(eval_rm)
                 divergences.append(float(eval_rm["D"]))
 
             path_trace[agent.name] = collapse
 
-        quality = force_quality if force_quality is not None else self._audit_quality(collected)
+        quality = (
+            force_quality
+            if force_quality is not None
+            else self._audit_quality(collected)
+        )
         mean_qs = (
             sum(float(s["Q_s"]) for s in schema_results) / len(schema_results)
             if schema_results
             else 1.0
         )
-        schema_ok = all(s.get("passed", True) for s in schema_results) if schema_results else True
+        schema_ok = (
+            all(s.get("passed", True) for s in schema_results)
+            if schema_results
+            else True
+        )
 
         audit = self.executives.validator.audit(
             workload_name,
@@ -280,7 +370,10 @@ class FlowChartCharterSystem:
         self.blackboard.post_vector(audit)
         charter.state.quality_score = quality
 
-        while not audit.passed and charter.state.remediation_loops < charter.state.max_remediation:
+        while (
+            not audit.passed
+            and charter.state.remediation_loops < charter.state.max_remediation
+        ):
             charter.state.remediation_loops += 1
             batch_q: List[float] = []
             for agent in self.roster:
@@ -298,7 +391,8 @@ class FlowChartCharterSystem:
                 )
                 path = str(collapse["chosen_path"])
                 m = agent.execute_flow_unit(
-                    f"{workload_name} remediate#{charter.state.remediation_loops} via {path}",
+                    f"{workload_name} remediate#"
+                    f"{charter.state.remediation_loops} via {path}",
                     rng=self.rng,
                     quality_bias=0.15,
                     path=path,
@@ -311,8 +405,12 @@ class FlowChartCharterSystem:
                         agent.muscle_memory_weights,
                         m.quality_score,
                     )
-                path_trace[f"{agent.name}#r{charter.state.remediation_loops}"] = collapse
-            quality = self._audit_quality(collected[-3:]) if collected else quality
+                path_trace[
+                    f"{agent.name}#r{charter.state.remediation_loops}"
+                ] = collapse
+            quality = (
+                self._audit_quality(collected[-3:]) if collected else quality
+            )
             if batch_q:
                 agent_qualities.extend(batch_q)
             audit = self.executives.validator.audit(
@@ -330,7 +428,9 @@ class FlowChartCharterSystem:
         spend = self._token_sum(collected)
         self.token_spend += spend
         budget_vec = self.executives.cfo.issue_budget(
-            workload_name, token_spend=self.token_spend, token_budget=self.token_budget
+            workload_name,
+            token_spend=self.token_spend,
+            token_budget=self.token_budget,
         )
         self.blackboard.post_vector(budget_vec)
 
@@ -345,18 +445,24 @@ class FlowChartCharterSystem:
         entanglement = mean_pair_synergy(agent_qualities, divergences)
         router_summary = self.router.summary()
 
-        # Store success in muscle memory
         if trust and quality >= 0.90:
-            dominant_path = "path_A"
-            if path_trace:
-                first = next(iter(path_trace.values()))
-                if isinstance(first, dict):
-                    dominant_path = str(first.get("chosen_path", "path_A"))
-            self.memory_store.add(
-                MuscleMemoryRecord(
-                    charter_id=workload_name,
-                    path=dominant_path,
-                    state_vector=tuple(state_vec),
+            paths_used = []
+            for v in path_trace.values():
+                if isinstance(v, dict):
+                    p = v.get("chosen_path") or (
+                        (v.get("flow_path") or ["path_A"])[0]
+                    )
+                    paths_used.append(str(p))
+            self.muscle_db.commit_memory(
+                ExecutionMemoryRecord(
+                    memory_id=f"MEM-{workload_name[:12].replace(' ', '')}",
+                    job_type=workload_name,
+                    state_vector=list(state_vec),
+                    successful_flow_path=paths_used or ["path_A"],
+                    entanglement_score=min(1.0, max(0.0, entanglement)),
+                    prompt_tweak=(
+                        trajectory.prompt_tweak if trajectory else ""
+                    ),
                     quality=quality,
                     token_cost=spend,
                     tags=(workload_name.split()[0].lower(),),
@@ -381,9 +487,18 @@ class FlowChartCharterSystem:
             "context_entropy": round(h_ctx, 4),
             "cfo_gates": cfo_reports,
             "precedent": precedent,
+            "muscle_memory_hit": accelerated,
+            "muscle_memory_id": trajectory.memory_id if trajectory else None,
+            "prompt_tweak": trajectory.prompt_tweak if trajectory else None,
+            "flow_path_reused": (
+                list(trajectory.successful_flow_path) if trajectory else None
+            ),
+            "muscle_db_stats": self.muscle_db.stats(),
             "schema_audits": schema_results,
             "boss_prompt_loaded": bool(self.boss.system_prompt),
-            "foundations_ref": "charter|flow_units|rhythm_markers|muscle_memory|coach_trust",
+            "foundations_ref": (
+                "charter|flow_units|rhythm_markers|muscle_memory|coach_trust"
+            ),
         }
         self.checkpointer.append(snap)
         self.blackboard.completed_jobs.append(workload_name)
@@ -392,8 +507,10 @@ class FlowChartCharterSystem:
         charter.bump()
         return snap
 
-    def downtime_sync(self, telemetry: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """ST-07 via TriggerMondayMorningSync skill."""
+    def downtime_sync(
+        self, telemetry: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """ST-07 via TriggerMondayMorningSync — commits trajectories to VDB."""
         tel = telemetry or {
             "path_stats": {
                 "path_A": {"success_rate": 0.92},
@@ -403,17 +520,29 @@ class FlowChartCharterSystem:
             "successful_runs": [
                 {
                     "charter_id": s["workload"],
-                    "path": "path_A",
-                    "state_vector": [s.get("context_entropy", 0.3), 0.5, 0.5, 0.7],
+                    "path": (s.get("flow_path_reused") or ["path_A"])[0],
+                    "flow_path": s.get("flow_path_reused") or ["path_A"],
+                    "state_vector": [
+                        s.get("context_entropy", 0.3),
+                        0.5,
+                        0.5,
+                        0.7,
+                    ],
                     "quality": s["quality"],
+                    "entanglement_score": s.get("entanglement", 0.95),
                     "token_cost": 200,
+                    "prompt_tweak": s.get("prompt_tweak") or "",
                 }
                 for s in self.checkpointer
                 if s.get("trust")
             ],
         }
-        skill_result = self.skills.TriggerMondayMorningSync(tel, roster=self.roster, boss=self.boss)
-        outcomes = skill_result.get("outcomes") or self.boss.monday_morning_sync(self.roster, rng=self.rng)
+        skill_result = self.skills.TriggerMondayMorningSync(
+            tel, roster=self.roster, boss=self.boss
+        )
+        outcomes = skill_result.get("outcomes") or self.boss.monday_morning_sync(
+            self.roster, rng=self.rng
+        )
 
         fitness_snap = {
             a.name: round(a.calculate_fitness(), 4)
@@ -450,11 +579,14 @@ class FlowChartCharterSystem:
             "guidance": [v.to_dict() for v in guidance],
             "vectors": self.blackboard.recent_vectors(16),
             "muscle_memory": muscle_snapshot,
+            "muscle_db": self.muscle_db.export_dict(),
             "quantum_lifetime": self.router.summary(),
             "skill_sync": skill_result,
             "boss_ack": self.boss_ack,
             "tool_schemas": [s["name"] for s in self.skills.tool_schemas()],
-            "blueprint_foundations": [f["name"] for f in self.blueprint["foundations"]],
+            "blueprint_foundations": [
+                f["name"] for f in self.blueprint["foundations"]
+            ],
         }
 
     def ontology_export(self) -> Dict[str, Any]:

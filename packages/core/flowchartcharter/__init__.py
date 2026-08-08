@@ -14,6 +14,9 @@ from .vectors import (
     validate_executive_payload,
 )
 from .executive import CEOAgent, CFOAgent, BoardAgent, RhythmValidatorAgent, ExecutiveBoard
+from .knowledge_graph import KnowledgeGraph, build_ontology
+from .foundations import FOUNDATIONS, foundations_table, blueprint_export, FLOW_UNIT_BLUEPRINT
+from .quantum import quantum_path_select, build_superposition, measure
 
 __all__ = [
     "ExecutionMetrics",
@@ -39,5 +42,14 @@ __all__ = [
     "BoardAgent",
     "RhythmValidatorAgent",
     "ExecutiveBoard",
+    "KnowledgeGraph",
+    "build_ontology",
+    "FOUNDATIONS",
+    "foundations_table",
+    "blueprint_export",
+    "FLOW_UNIT_BLUEPRINT",
+    "quantum_path_select",
+    "build_superposition",
+    "measure",
 ]
-__version__ = "0.2.0"
+__version__ = "0.3.0"

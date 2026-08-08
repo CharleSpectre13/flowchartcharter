@@ -1,0 +1,782 @@
+{
+  "version": "0.3.0",
+  "paradigm": "Charter primary; GraphRAG callable sub-flow only",
+  "communities": {
+    "core_concept": "Core Concept \u2014 execution-first paradigm",
+    "foundational": "Foundational Structures \u2014 DNA of FCC",
+    "hierarchy": "Corporate Hierarchy \u2014 accountability ladder",
+    "operations": "Operational Mechanisms \u2014 rhythm & trust",
+    "math": "Mathematical Framework \u2014 quantum routing & fitness",
+    "goals": "Strategic Goals \u2014 earned trust at scale",
+    "phases": "Lifecycle Phases ST-01\u2026ST-07"
+  },
+  "entities": [
+    {
+      "id": "fcc",
+      "title": "FlowChartCharter Engineering",
+      "type": "Concept",
+      "description": "Execution-and-quality-first multi-agent state-chart systems; agents follow rather than search.",
+      "community": "core_concept",
+      "importance": 1.0,
+      "sources": [
+        "Drive:Blueprint",
+        "Drive:ArchSpec",
+        "IMG:mindmap"
+      ]
+    },
+    {
+      "id": "exec_over_retrieval",
+      "title": "Execution over Retrieval",
+      "type": "Concept",
+      "description": "Primary focus is fastest reliable path to completion, not open graph lookup.",
+      "community": "core_concept",
+      "importance": 0.95,
+      "sources": [
+        "Drive:Blueprint",
+        "IMG:playbook"
+      ]
+    },
+    {
+      "id": "deterministic_playbooks",
+      "title": "Deterministic Playbooks",
+      "type": "Concept",
+      "description": "Pre-approved paths eliminate guesswork and execution drift.",
+      "community": "core_concept",
+      "importance": 0.9,
+      "sources": [
+        "Drive:HeadCoach"
+      ]
+    },
+    {
+      "id": "unified_multi_agent",
+      "title": "Unified Multi-Agent Architecture",
+      "type": "Concept",
+      "description": "Corporate hierarchy + BSP super-steps + Blackboard volunteer binding.",
+      "community": "core_concept",
+      "importance": 0.9,
+      "sources": [
+        "Drive:SystemDesign"
+      ]
+    },
+    {
+      "id": "self_optimizing",
+      "title": "Self-Optimizing System",
+      "type": "Concept",
+      "description": "Async RLAIF via Monday Morning Sync raises benchmarks without human micro-management.",
+      "community": "core_concept",
+      "importance": 0.9,
+      "sources": [
+        "Drive:Blueprint"
+      ]
+    },
+    {
+      "id": "charter",
+      "title": "Charter (Pre-drawn Map)",
+      "type": "Structure",
+      "description": "Quantum measurement operator M that collapses path superposition into deterministic action.",
+      "community": "foundational",
+      "importance": 1.0,
+      "sources": [
+        "Spreadsheet:Table1",
+        "Drive:ArchSpec"
+      ]
+    },
+    {
+      "id": "flow_units",
+      "title": "Flow Units (Type-safe Contracts)",
+      "type": "Structure",
+      "description": "Discrete modules |FlowUnit_i\u27e9 with explicit I/O and exit criteria.",
+      "community": "foundational",
+      "importance": 0.95,
+      "sources": [
+        "Spreadsheet:Table1"
+      ]
+    },
+    {
+      "id": "rhythm_markers",
+      "title": "Rhythm Markers (Validation Points)",
+      "type": "Structure",
+      "description": "Self-auditing checkpoints that force wave-function collapse before Blackboard commit.",
+      "community": "foundational",
+      "importance": 0.95,
+      "sources": [
+        "Spreadsheet:Table1",
+        "IMG:playbook"
+      ]
+    },
+    {
+      "id": "muscle_memory",
+      "title": "Muscle-Memory Loop",
+      "type": "Structure",
+      "description": "Historical success amplitudes c_i weight future path selection; autonomous correction.",
+      "community": "foundational",
+      "importance": 0.95,
+      "sources": [
+        "Spreadsheet:Table1"
+      ]
+    },
+    {
+      "id": "engineer_exit",
+      "title": "Engineer Exit / Coach Trust Hand-Off",
+      "type": "Structure",
+      "description": "Milestone of Earned Engineering Trust \u2014 Head Coach steps back without stepping out.",
+      "community": "foundational",
+      "importance": 1.0,
+      "sources": [
+        "Spreadsheet:Table1",
+        "Drive:HeadCoach"
+      ]
+    },
+    {
+      "id": "monday_sync",
+      "title": "Monday Morning Sync (Async RLAIF)",
+      "type": "Structure",
+      "description": "ST-07 downtime talent + prompt optimization under Boss Agent leadership.",
+      "community": "foundational",
+      "importance": 0.9,
+      "sources": [
+        "Spreadsheet:Table1",
+        "IMG:playbook"
+      ]
+    },
+    {
+      "id": "ceo",
+      "title": "CEO Agent",
+      "type": "Role",
+      "description": "Strategic vectors; intervenes only on sync/forks.",
+      "community": "hierarchy",
+      "importance": 0.85,
+      "sources": [
+        "Drive:Blueprint"
+      ]
+    },
+    {
+      "id": "cfo",
+      "title": "CFO Agent",
+      "type": "Role",
+      "description": "BudgetVector; token spend vs cap; halt_if_over.",
+      "community": "hierarchy",
+      "importance": 0.85,
+      "sources": [
+        "Drive:Blueprint"
+      ]
+    },
+    {
+      "id": "board",
+      "title": "Executive Board",
+      "type": "Role",
+      "description": "GovernanceVector; approves Coach Trust Hand-Off.",
+      "community": "hierarchy",
+      "importance": 0.9,
+      "sources": [
+        "Drive:ArchSpec"
+      ]
+    },
+    {
+      "id": "gm",
+      "title": "General Manager (Boss Agent)",
+      "type": "Role",
+      "description": "Day-to-day ops buffer; OpsVector talent outcomes.",
+      "community": "hierarchy",
+      "importance": 1.0,
+      "sources": [
+        "IMG:playbook"
+      ]
+    },
+    {
+      "id": "position_mgr",
+      "title": "Position Managers",
+      "type": "Role",
+      "description": "Segment oversight of charter sub-flows.",
+      "community": "hierarchy",
+      "importance": 0.7,
+      "sources": [
+        "Drive:HeadCoach"
+      ]
+    },
+    {
+      "id": "key_players",
+      "title": "Key Players",
+      "type": "Role",
+      "description": "Execute flow units under typed contracts.",
+      "community": "hierarchy",
+      "importance": 0.8,
+      "sources": [
+        "Drive:HeadCoach"
+      ]
+    },
+    {
+      "id": "coaches",
+      "title": "Coaches and Architects",
+      "type": "Role",
+      "description": "Structural integrity and rhythm optimization.",
+      "community": "hierarchy",
+      "importance": 0.75,
+      "sources": [
+        "Drive:HeadCoach"
+      ]
+    },
+    {
+      "id": "head_coach",
+      "title": "Human Head Coach",
+      "type": "Role",
+      "description": "System Architect; designs Charter, earns trust exit.",
+      "community": "hierarchy",
+      "importance": 1.0,
+      "sources": [
+        "Drive:HeadCoach"
+      ]
+    },
+    {
+      "id": "validator",
+      "title": "Rhythm Marker Validator",
+      "type": "Role",
+      "description": "Maker-checker at gates; never the implementor.",
+      "community": "hierarchy",
+      "importance": 0.9,
+      "sources": [
+        "skill:rhythm-marker-validator"
+      ]
+    },
+    {
+      "id": "blackboard",
+      "title": "Blackboard (Structured Communication)",
+      "type": "Mechanism",
+      "description": "JSON performance vectors only \u2014 forbids free-form NL among agents.",
+      "community": "operations",
+      "importance": 0.95,
+      "sources": [
+        "Drive:Blueprint"
+      ]
+    },
+    {
+      "id": "talent_mgmt",
+      "title": "Dynamic Talent Management",
+      "type": "Mechanism",
+      "description": "Promote / demote / fire by fitness during Monday Morning Sync.",
+      "community": "operations",
+      "importance": 0.9,
+      "sources": [
+        "Drive:Blueprint"
+      ]
+    },
+    {
+      "id": "bsp",
+      "title": "BSP Super-Step Engine",
+      "type": "Mechanism",
+      "description": "Pregel-style parallel execution with deterministic channel reducers.",
+      "community": "operations",
+      "importance": 0.85,
+      "sources": [
+        "Drive:SystemDesign"
+      ]
+    },
+    {
+      "id": "superposition",
+      "title": "Quantum Path Superposition",
+      "type": "Metric",
+      "description": "|\u03c8\u27e9 = \u03a3 c_i |FlowUnit_i\u27e9 with c_i from muscle-memory success rates.",
+      "community": "math",
+      "importance": 0.95,
+      "sources": [
+        "Drive:ArchSpec",
+        "IMG:playbook"
+      ]
+    },
+    {
+      "id": "collapse",
+      "title": "Wave Function Collapse (Measurement)",
+      "type": "Metric",
+      "description": "|ExecutedPath\u27e9 = M|\u03c8\u27e9 at Rhythm Markers \u2014 100% confident action.",
+      "community": "math",
+      "importance": 0.95,
+      "sources": [
+        "Drive:ArchSpec"
+      ]
+    },
+    {
+      "id": "fitness_score",
+      "title": "Agent Fitness Score F(x)",
+      "type": "Metric",
+      "description": "F = \u03b1\u00b7(Q_success/Q_total) + \u03b2\u00b7(1/\u0394t) \u2212 \u03b3\u00b7Tokens + Q_entanglement",
+      "community": "math",
+      "importance": 1.0,
+      "sources": [
+        "Drive:Blueprint"
+      ]
+    },
+    {
+      "id": "synergy",
+      "title": "Synergy Entanglement Score",
+      "type": "Metric",
+      "description": "How seamlessly agent output integrates into next unit without friction.",
+      "community": "math",
+      "importance": 0.9,
+      "sources": [
+        "Drive:Blueprint"
+      ]
+    },
+    {
+      "id": "earned_trust",
+      "title": "Earned Engineering Trust",
+      "type": "Goal",
+      "description": "Empirically proven reliability enabling human-out-of-loop scale.",
+      "community": "goals",
+      "importance": 1.0,
+      "sources": [
+        "Drive:HeadCoach"
+      ]
+    },
+    {
+      "id": "no_micromanage",
+      "title": "Eliminate Micro-management",
+      "type": "Goal",
+      "description": "Engineer designs playbook and steps back as Head Coach.",
+      "community": "goals",
+      "importance": 0.9,
+      "sources": [
+        "Drive:HeadCoach"
+      ]
+    },
+    {
+      "id": "latency_cost",
+      "title": "Latency and Cost Reduction",
+      "type": "Goal",
+      "description": "First-class metrics; type-safe contracts kill token bloat.",
+      "community": "goals",
+      "importance": 0.9,
+      "sources": [
+        "Drive:ArchSpec"
+      ]
+    },
+    {
+      "id": "scalable_perf",
+      "title": "Scalable Performance",
+      "type": "Goal",
+      "description": "Measured by agents-on-charter and human-out-of-loop time.",
+      "community": "goals",
+      "importance": 0.95,
+      "sources": [
+        "Drive:ArchSpec"
+      ]
+    },
+    {
+      "id": "st01",
+      "title": "ST-01 Charter Init",
+      "type": "Phase",
+      "description": "Board + Boss intake; StrategyVector.",
+      "community": "phases",
+      "importance": 0.7,
+      "sources": []
+    },
+    {
+      "id": "st02",
+      "title": "ST-02 Voluntary Bind",
+      "type": "Phase",
+      "description": "Blackboard volunteer capability\u00d7rank match.",
+      "community": "phases",
+      "importance": 0.7,
+      "sources": []
+    },
+    {
+      "id": "st03",
+      "title": "ST-03 Super-Step",
+      "type": "Phase",
+      "description": "BSP parallel flow unit execution.",
+      "community": "phases",
+      "importance": 0.7,
+      "sources": []
+    },
+    {
+      "id": "st04",
+      "title": "ST-04 Rhythm Audit",
+      "type": "Phase",
+      "description": "Independent RhythmAudit gate.",
+      "community": "phases",
+      "importance": 0.85,
+      "sources": []
+    },
+    {
+      "id": "st05",
+      "title": "ST-05 Muscle Memory",
+      "type": "Phase",
+      "description": "Remediation from checkpoints (max 3).",
+      "community": "phases",
+      "importance": 0.7,
+      "sources": []
+    },
+    {
+      "id": "st06",
+      "title": "ST-06 Coach Trust",
+      "type": "Phase",
+      "description": "GovernanceVector approve_hand_off.",
+      "community": "phases",
+      "importance": 0.9,
+      "sources": []
+    },
+    {
+      "id": "st07",
+      "title": "ST-07 Monday Sync",
+      "type": "Phase",
+      "description": "Talent + RLAIF downtime optimization.",
+      "community": "phases",
+      "importance": 0.85,
+      "sources": []
+    }
+  ],
+  "relations": [
+    {
+      "src": "fcc",
+      "dst": "exec_over_retrieval",
+      "type": "owns",
+      "description": "paradigm pillar",
+      "strength": 1.0
+    },
+    {
+      "src": "fcc",
+      "dst": "deterministic_playbooks",
+      "type": "owns",
+      "description": "paradigm pillar",
+      "strength": 1.0
+    },
+    {
+      "src": "fcc",
+      "dst": "unified_multi_agent",
+      "type": "owns",
+      "description": "paradigm pillar",
+      "strength": 1.0
+    },
+    {
+      "src": "fcc",
+      "dst": "self_optimizing",
+      "type": "owns",
+      "description": "paradigm pillar",
+      "strength": 1.0
+    },
+    {
+      "src": "fcc",
+      "dst": "charter",
+      "type": "implements",
+      "description": "DNA structure",
+      "strength": 1.0
+    },
+    {
+      "src": "charter",
+      "dst": "flow_units",
+      "type": "owns",
+      "description": "building blocks",
+      "strength": 1.0
+    },
+    {
+      "src": "charter",
+      "dst": "rhythm_markers",
+      "type": "owns",
+      "description": "validation points",
+      "strength": 1.0
+    },
+    {
+      "src": "charter",
+      "dst": "muscle_memory",
+      "type": "uses",
+      "description": "path amplitudes",
+      "strength": 1.0
+    },
+    {
+      "src": "rhythm_markers",
+      "dst": "collapse",
+      "type": "enables",
+      "description": "measurement M",
+      "strength": 1.0
+    },
+    {
+      "src": "superposition",
+      "dst": "collapse",
+      "type": "collapses_to",
+      "description": "deterministic path",
+      "strength": 1.0
+    },
+    {
+      "src": "muscle_memory",
+      "dst": "superposition",
+      "type": "enables",
+      "description": "sets c_i amplitudes",
+      "strength": 1.0
+    },
+    {
+      "src": "charter",
+      "dst": "superposition",
+      "type": "implements",
+      "description": "operator M",
+      "strength": 1.0
+    },
+    {
+      "src": "board",
+      "dst": "gm",
+      "type": "owns",
+      "description": "oversight",
+      "strength": 1.0
+    },
+    {
+      "src": "ceo",
+      "dst": "board",
+      "type": "reports_to",
+      "description": "exec layer",
+      "strength": 1.0
+    },
+    {
+      "src": "cfo",
+      "dst": "board",
+      "type": "reports_to",
+      "description": "exec layer",
+      "strength": 1.0
+    },
+    {
+      "src": "gm",
+      "dst": "position_mgr",
+      "type": "owns",
+      "description": "ops buffer",
+      "strength": 1.0
+    },
+    {
+      "src": "position_mgr",
+      "dst": "key_players",
+      "type": "owns",
+      "description": "execution",
+      "strength": 1.0
+    },
+    {
+      "src": "head_coach",
+      "dst": "engineer_exit",
+      "type": "enables",
+      "description": "trust milestone",
+      "strength": 1.0
+    },
+    {
+      "src": "validator",
+      "dst": "rhythm_markers",
+      "type": "implements",
+      "description": "maker-checker",
+      "strength": 1.0
+    },
+    {
+      "src": "gm",
+      "dst": "monday_sync",
+      "type": "implements",
+      "description": "ST-07 leadership",
+      "strength": 1.0
+    },
+    {
+      "src": "monday_sync",
+      "dst": "talent_mgmt",
+      "type": "enables",
+      "description": "promote/fire",
+      "strength": 1.0
+    },
+    {
+      "src": "fitness_score",
+      "dst": "talent_mgmt",
+      "type": "measures",
+      "description": "promotability",
+      "strength": 1.0
+    },
+    {
+      "src": "synergy",
+      "dst": "fitness_score",
+      "type": "enables",
+      "description": "entanglement term",
+      "strength": 1.0
+    },
+    {
+      "src": "blackboard",
+      "dst": "ceo",
+      "type": "uses",
+      "description": "StrategyVector",
+      "strength": 1.0
+    },
+    {
+      "src": "blackboard",
+      "dst": "cfo",
+      "type": "uses",
+      "description": "BudgetVector",
+      "strength": 1.0
+    },
+    {
+      "src": "blackboard",
+      "dst": "board",
+      "type": "uses",
+      "description": "GovernanceVector",
+      "strength": 1.0
+    },
+    {
+      "src": "blackboard",
+      "dst": "gm",
+      "type": "uses",
+      "description": "OpsVector",
+      "strength": 1.0
+    },
+    {
+      "src": "engineer_exit",
+      "dst": "earned_trust",
+      "type": "enables",
+      "description": "strategic goal",
+      "strength": 1.0
+    },
+    {
+      "src": "st04",
+      "dst": "rhythm_markers",
+      "type": "implements",
+      "description": "gate phase",
+      "strength": 1.0
+    },
+    {
+      "src": "st06",
+      "dst": "engineer_exit",
+      "type": "implements",
+      "description": "hand-off phase",
+      "strength": 1.0
+    },
+    {
+      "src": "st07",
+      "dst": "monday_sync",
+      "type": "implements",
+      "description": "sync phase",
+      "strength": 1.0
+    },
+    {
+      "src": "flow_units",
+      "dst": "key_players",
+      "type": "uses",
+      "description": "execution tier",
+      "strength": 1.0
+    },
+    {
+      "src": "bsp",
+      "dst": "st03",
+      "type": "implements",
+      "description": "super-step",
+      "strength": 1.0
+    },
+    {
+      "src": "latency_cost",
+      "dst": "cfo",
+      "type": "measures",
+      "description": "token governance",
+      "strength": 1.0
+    },
+    {
+      "src": "scalable_perf",
+      "dst": "earned_trust",
+      "type": "enables",
+      "description": "human-out-of-loop",
+      "strength": 1.0
+    }
+  ],
+  "community_reports": {
+    "core_concept": {
+      "title": "Core Concept \u2014 execution-first paradigm",
+      "executive_summary": "Core Concept \u2014 execution-first paradigm: FlowChartCharter Engineering, Execution over Retrieval, Deterministic Playbooks, Unified Multi-Agent Architecture, Self-Optimizing System",
+      "entity_count": 5,
+      "top_entities": [
+        "FlowChartCharter Engineering",
+        "Execution over Retrieval",
+        "Deterministic Playbooks",
+        "Unified Multi-Agent Architecture",
+        "Self-Optimizing System"
+      ],
+      "importance": 1.0
+    },
+    "foundational": {
+      "title": "Foundational Structures \u2014 DNA of FCC",
+      "executive_summary": "Foundational Structures \u2014 DNA of FCC: Charter (Pre-drawn Map), Engineer Exit / Coach Trust Hand-Off, Flow Units (Type-safe Contracts), Rhythm Markers (Validation Points), Muscle-Memory Loop",
+      "entity_count": 6,
+      "top_entities": [
+        "Charter (Pre-drawn Map)",
+        "Engineer Exit / Coach Trust Hand-Off",
+        "Flow Units (Type-safe Contracts)",
+        "Rhythm Markers (Validation Points)",
+        "Muscle-Memory Loop",
+        "Monday Morning Sync (Async RLAIF)"
+      ],
+      "importance": 1.0
+    },
+    "hierarchy": {
+      "title": "Corporate Hierarchy \u2014 accountability ladder",
+      "executive_summary": "Corporate Hierarchy \u2014 accountability ladder: General Manager (Boss Agent), Human Head Coach, Executive Board, Rhythm Marker Validator, CEO Agent",
+      "entity_count": 9,
+      "top_entities": [
+        "General Manager (Boss Agent)",
+        "Human Head Coach",
+        "Executive Board",
+        "Rhythm Marker Validator",
+        "CEO Agent",
+        "CFO Agent",
+        "Key Players",
+        "Coaches and Architects"
+      ],
+      "importance": 1.0
+    },
+    "operations": {
+      "title": "Operational Mechanisms \u2014 rhythm & trust",
+      "executive_summary": "Operational Mechanisms \u2014 rhythm & trust: Blackboard (Structured Communication), Dynamic Talent Management, BSP Super-Step Engine",
+      "entity_count": 3,
+      "top_entities": [
+        "Blackboard (Structured Communication)",
+        "Dynamic Talent Management",
+        "BSP Super-Step Engine"
+      ],
+      "importance": 0.95
+    },
+    "math": {
+      "title": "Mathematical Framework \u2014 quantum routing & fitness",
+      "executive_summary": "Mathematical Framework \u2014 quantum routing & fitness: Agent Fitness Score F(x), Quantum Path Superposition, Wave Function Collapse (Measurement), Synergy Entanglement Score",
+      "entity_count": 4,
+      "top_entities": [
+        "Agent Fitness Score F(x)",
+        "Quantum Path Superposition",
+        "Wave Function Collapse (Measurement)",
+        "Synergy Entanglement Score"
+      ],
+      "importance": 1.0
+    },
+    "goals": {
+      "title": "Strategic Goals \u2014 earned trust at scale",
+      "executive_summary": "Strategic Goals \u2014 earned trust at scale: Earned Engineering Trust, Scalable Performance, Eliminate Micro-management, Latency and Cost Reduction",
+      "entity_count": 4,
+      "top_entities": [
+        "Earned Engineering Trust",
+        "Scalable Performance",
+        "Eliminate Micro-management",
+        "Latency and Cost Reduction"
+      ],
+      "importance": 1.0
+    },
+    "phases": {
+      "title": "Lifecycle Phases ST-01\u2026ST-07",
+      "executive_summary": "Lifecycle Phases ST-01\u2026ST-07: ST-06 Coach Trust, ST-04 Rhythm Audit, ST-07 Monday Sync, ST-01 Charter Init, ST-02 Voluntary Bind",
+      "entity_count": 7,
+      "top_entities": [
+        "ST-06 Coach Trust",
+        "ST-04 Rhythm Audit",
+        "ST-07 Monday Sync",
+        "ST-01 Charter Init",
+        "ST-02 Voluntary Bind",
+        "ST-03 Super-Step",
+        "ST-05 Muscle Memory"
+      ],
+      "importance": 0.9
+    }
+  },
+  "sources": {
+    "drive": [
+      "The FlowChartCharter Blueprint (Corporate Governance)",
+      "FlowChartCharter: Head Coach Guide",
+      "Architectural Specification",
+      "Engineering System Design",
+      "System Design and Structure (spreadsheet)"
+    ],
+    "images": [
+      "IMG_0544 mind map",
+      "IMG_0542 hierarchy+playbook"
+    ]
+  }
+}

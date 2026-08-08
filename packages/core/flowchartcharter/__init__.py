@@ -84,6 +84,7 @@ from .reference_engine import (
     CFOHaltError,
     default_playbook,
     run_reference_simulation,
+    apply_reference_telemetry,
 )
 from .muscle_memory import (
     ExecutionMemoryRecord,
@@ -106,6 +107,14 @@ from .survival import (
     should_fire_from_ledger,
 )
 from .elastic import ElasticRequisitionBoard, PhantomRecord
+from .living_playbook import (
+    LivingPlaybook,
+    AscendedMemoryRecord,
+    AbstractedKPIs,
+    seed_living_playbook,
+    objective_signature_from_payload,
+    capability_map_from_path,
+)
 
 __all__ = [
     "ExecutionMetrics",
@@ -178,6 +187,7 @@ __all__ = [
     "CFOHaltError",
     "default_playbook",
     "run_reference_simulation",
+    "apply_reference_telemetry",
     "ExecutionMemoryRecord",
     "MuscleMemoryVectorDB",
     "encode_state",
@@ -196,5 +206,11 @@ __all__ = [
     "should_fire_from_ledger",
     "ElasticRequisitionBoard",
     "PhantomRecord",
+    "LivingPlaybook",
+    "AscendedMemoryRecord",
+    "AbstractedKPIs",
+    "seed_living_playbook",
+    "objective_signature_from_payload",
+    "capability_map_from_path",
 ]
-__version__ = "0.9.0"
+__version__ = "1.0.0"

@@ -10,6 +10,7 @@ from .elastic import ElasticRequisitionBoard
 from .executive import ExecutiveBoard
 from .foundations import blueprint_export
 from .knowledge_graph import KnowledgeGraph
+from .living_playbook import LivingPlaybook, seed_living_playbook
 from .metrics import ExecutionMetrics
 from .muscle_memory import (
     ExecutionMemoryRecord,
@@ -32,7 +33,7 @@ from .synergy import mean_pair_synergy
 
 
 class FlowChartCharterSystem:
-    """Facade: ST-01…ST-07 + Muscle-Memory + Survival + Elastic Requisition."""
+    """Facade: ST-01…ST-07 + Living Playbook + Ascension + Survival."""
 
     PATHS = DEFAULT_PATHS
 
@@ -42,6 +43,7 @@ class FlowChartCharterSystem:
         seed: Optional[int] = None,
         *,
         deterministic_routing: bool = True,
+        model_class: str = "generic",
     ):
         self.head_coach = head_coach
         self.rng = random.Random(seed)
@@ -60,6 +62,12 @@ class FlowChartCharterSystem:
         self.muscle_db = MuscleMemoryVectorDB(quiet=True)
         seed_legacy_refactor(self.muscle_db)
         self.memory_store = MuscleMemoryStore(self.muscle_db)
+        self.playbook = LivingPlaybook(
+            model_class=model_class,
+            quiet=True,
+            ascension_threshold=12,
+        )
+        seed_living_playbook(self.playbook)
         self.elastic = ElasticRequisitionBoard()
         self.roster: List[Agent] = [
             Agent(
@@ -129,6 +137,29 @@ class FlowChartCharterSystem:
             )
         )
 
+    def roster_capability_map(self) -> Dict[str, float]:
+        caps: Dict[str, float] = {}
+        for a in self.roster:
+            if a.status == AgentStatus.FIRED:
+                continue
+            for k, v in a.capability_vector.items():
+                caps[k] = max(caps.get(k, 0.0), float(v))
+            for c in getattr(a, "capabilities", []):
+                caps.setdefault(c, 0.7)
+        return caps
+
+    def upgrade_personnel(self, new_model_class: str) -> Dict[str, Any]:
+        """Cross-generational playbook translation (e.g. 70B → 1T)."""
+        result = self.playbook.upgrade_generation(
+            new_model_class,
+            self.roster_capability_map(),
+        )
+        self.boss.playbook.append(
+            f"Personnel upgrade → {new_model_class}; "
+            f"remapped {result['remapped_count']} trajectories"
+        )
+        return result
+
     def quantum_path_selection(self, agent: Agent, paths: Sequence[str]) -> str:
         result = self.router.route_agent(
             charter_id="adhoc",
@@ -197,6 +228,17 @@ class FlowChartCharterSystem:
         ops = max(1, sum(1 for a in self.roster if self._is_ops(a)))
         return max(200, int((self.token_budget - self.token_spend) / ops))
 
+    def _path_to_router(self, flow_path: List[str], h_ctx: float) -> str:
+        """Map playbook unit ids onto path_A/B/lite for local execution."""
+        joined = " ".join(flow_path).lower()
+        if any(k in joined for k in ("clean", "sanit", "messy")):
+            return "path_B"
+        if "lite" in joined:
+            return "path_lite"
+        if h_ctx >= 0.55:
+            return "path_B"
+        return "path_A"
+
     def execute_charter(
         self,
         workload_name: str,
@@ -205,8 +247,9 @@ class FlowChartCharterSystem:
         context_entropy: Optional[float] = None,
         payload: Optional[Dict[str, Any]] = None,
         force_capability: Optional[str] = None,
+        force_zero_shot: bool = False,
     ) -> Dict[str, Any]:
-        """ST-01..ST-06 + Muscle-Memory + Survival + Elastic Phantom Nodes."""
+        """ST-01..ST-06 + Living Playbook ascension + Muscle-Memory."""
         self.router.history.clear()
         self.router._pending.clear()
 
@@ -220,7 +263,6 @@ class FlowChartCharterSystem:
             )
         )
 
-        # V3: Elastic Requisition if capability gap on novel / lean roster
         phantom = self.elastic.evaluate(
             workload_name,
             self.roster,
@@ -276,6 +318,13 @@ class FlowChartCharterSystem:
             "h_ctx": h_ctx,
             "priority": strategy.priority,
         }
+
+        # Living Playbook: hit | zero_shot | miss
+        living = self.playbook.synthesize_charter(
+            payload_for_mm,
+            entropy=h_ctx,
+            force_zero_shot=force_zero_shot,
+        )
         precedent = self.skills.QueryMuscleMemory(
             state_vec, threshold=0.70, payload=payload_for_mm
         )
@@ -285,6 +334,9 @@ class FlowChartCharterSystem:
             state_vector=state_vec,
         )
 
+        living_hit = living["mode"] in ("hit", "zero_shot") and living.get("path")
+        accelerated = living_hit or trajectory is not None
+
         collected: List[ExecutionMetrics] = []
         path_trace: Dict[str, Any] = {}
         agent_qualities: List[float] = []
@@ -293,7 +345,6 @@ class FlowChartCharterSystem:
         divergences: List[float] = []
         survival_snaps: List[Dict[str, Any]] = []
         remaining = float(self.token_budget - self.token_spend)
-        accelerated = trajectory is not None
 
         for agent in self.roster:
             if not self._is_ops(agent):
@@ -307,7 +358,23 @@ class FlowChartCharterSystem:
             cfo_reports.append({"agent": agent.name, **cfo_report})
             agent.refresh_survival_prompt()
 
-            if accelerated and trajectory is not None:
+            if living_hit and living.get("path"):
+                flow_path = list(living["path"])
+                path = self._path_to_router(flow_path, h_ctx)
+                collapse = {
+                    "chosen_path": path,
+                    "source": f"living_playbook:{living['mode']}",
+                    "memory_id": living.get("memory_id"),
+                    "prompt_tweak": living.get("prompt_tweak") or "",
+                    "flow_path": flow_path,
+                    "post_measurement": {"confidence": 1.0, "entropy": 0.0},
+                    "pre_measurement": {"entropy": 0.0, "amplitudes": []},
+                    "context_entropy": h_ctx,
+                    "cfo_forced": False,
+                    "ascension": living.get("ascension"),
+                    "rationale": living.get("rationale"),
+                }
+            elif trajectory is not None:
                 path = trajectory.successful_flow_path[0]
                 if path not in self.PATHS and not path.startswith("path_"):
                     path = "path_A" if h_ctx < 0.5 else "path_B"
@@ -344,8 +411,10 @@ class FlowChartCharterSystem:
                 bias -= 0.03
             if accelerated:
                 bias += 0.05
+            if living.get("mode") == "zero_shot":
+                bias += 0.03  # synthesized chart still high confidence
             if getattr(agent, "is_phantom", False):
-                bias += 0.08  # phantoms under pressure must prove quality
+                bias += 0.08
 
             schema_ok_hint = agent.termination_risk_index < 0.55
             exec_path = (
@@ -510,28 +579,49 @@ class FlowChartCharterSystem:
         entanglement = mean_pair_synergy(agent_qualities, divergences)
         router_summary = self.router.summary()
 
-        if trust and quality >= 0.90:
-            paths_used = []
+        flow_path_used: List[str] = []
+        if living_hit and living.get("path"):
+            flow_path_used = list(living["path"])
+        elif trajectory is not None:
+            flow_path_used = list(trajectory.successful_flow_path)
+        else:
             for v in path_trace.values():
-                if isinstance(v, dict):
-                    p = v.get("chosen_path") or (
-                        (v.get("flow_path") or ["path_A"])[0]
-                    )
-                    paths_used.append(str(p))
+                if isinstance(v, dict) and v.get("chosen_path"):
+                    flow_path_used.append(str(v["chosen_path"]))
+
+        if trust and quality >= 0.90:
             self.muscle_db.commit_memory(
                 ExecutionMemoryRecord(
                     memory_id=f"MEM-{workload_name[:12].replace(' ', '')}",
                     job_type=workload_name,
                     state_vector=list(state_vec),
-                    successful_flow_path=paths_used or ["path_A"],
+                    successful_flow_path=flow_path_used or ["path_A"],
                     entanglement_score=min(1.0, max(0.0, entanglement)),
-                    prompt_tweak=(
-                        trajectory.prompt_tweak if trajectory else ""
-                    ),
+                    prompt_tweak=str(living.get("prompt_tweak") or ""),
                     quality=quality,
                     token_cost=spend,
                     tags=(workload_name.split()[0].lower(),),
                 )
+            )
+            # Living playbook commit (why it worked + capability map)
+            self.playbook.commit_from_execution(
+                job_type=workload_name,
+                flow_path=flow_path_used or ["path_A"],
+                payload=payload_for_mm,
+                quality=quality,
+                token_cost=spend,
+                expected_tokens=max(200, spend // max(1, len(collected) or 1)),
+                actual_time=1.0,
+                expected_time=1.2,
+                entanglement=entanglement,
+                schema_ok=schema_ok,
+                prompt_tweak=str(living.get("prompt_tweak") or ""),
+                agent_caps=self.roster_capability_map(),
+                entropy=h_ctx,
+                muscle_db=self.muscle_db,
+                rationale=(
+                    f"trust={trust} Q={quality:.3f} mode={living.get('mode')}"
+                ),
             )
 
         snap: Dict[str, Any] = {
@@ -552,21 +642,29 @@ class FlowChartCharterSystem:
             "context_entropy": round(h_ctx, 4),
             "cfo_gates": cfo_reports,
             "precedent": precedent,
-            "muscle_memory_hit": accelerated,
+            "muscle_memory_hit": trajectory is not None,
             "muscle_memory_id": trajectory.memory_id if trajectory else None,
-            "prompt_tweak": trajectory.prompt_tweak if trajectory else None,
-            "flow_path_reused": (
-                list(trajectory.successful_flow_path) if trajectory else None
-            ),
+            "living_playbook": living,
+            "playbook_mode": living.get("mode"),
+            "ascension": living.get("ascension"),
+            "prompt_tweak": living.get("prompt_tweak")
+            or (trajectory.prompt_tweak if trajectory else None),
+            "flow_path_reused": flow_path_used or None,
             "muscle_db_stats": self.muscle_db.stats(),
+            "playbook_export": {
+                "records": len(self.playbook.records),
+                "horizon": self.playbook.horizon_reached,
+                "iteration": self.playbook.evolution_iteration,
+                "model_class": self.playbook.model_class,
+            },
             "schema_audits": schema_results,
             "survival": survival_snaps,
             "phantom_spawned": phantom.name if phantom else None,
             "elastic": self.elastic.export(),
             "boss_prompt_loaded": bool(self.boss.system_prompt),
             "foundations_ref": (
-                "charter|flow_units|rhythm_markers|muscle_memory|"
-                "coach_trust|fear_survival|elastic_phantom"
+                "charter|living_playbook|ascension|muscle_memory|"
+                "fear_survival|elastic_phantom"
             ),
         }
         self.checkpointer.append(snap)
@@ -579,7 +677,6 @@ class FlowChartCharterSystem:
     def downtime_sync(
         self, telemetry: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """ST-07 — patched fitness prune + lean re-hire + phantom resolve."""
         tel = telemetry or {
             "path_stats": {
                 "path_A": {"success_rate": 0.92},
@@ -619,6 +716,13 @@ class FlowChartCharterSystem:
         )
         skill_result["outcomes"] = outcomes
         skill_result["phantom_outcomes"] = phantom_outcomes
+        # Ascension tick: evolution iteration advances on sync
+        if self.playbook.horizon_reached:
+            self.playbook.evolution_iteration += 1
+            self.boss.playbook.append(
+                f"Ascension active — living playbook iter "
+                f"{self.playbook.evolution_iteration}"
+            )
 
         fitness_snap = {
             a.name: round(a.calculate_fitness(), 4)
@@ -664,6 +768,8 @@ class FlowChartCharterSystem:
             "vectors": self.blackboard.recent_vectors(16),
             "muscle_memory": muscle_snapshot,
             "muscle_db": self.muscle_db.export_dict(),
+            "living_playbook": self.playbook.export(),
+            "ascension": self.playbook.horizon_reached,
             "quantum_lifetime": self.router.summary(),
             "skill_sync": skill_result,
             "lean_rehire": self.boss.rehire_export(),

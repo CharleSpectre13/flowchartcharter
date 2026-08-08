@@ -42,6 +42,16 @@ from .skills import (
     init_boss_agent,
 )
 from .prompts import BOSS_AGENT_SYSTEM_PROMPT, BOSS_ACKNOWLEDGEMENT, AGENT_SKILL_SCHEMAS
+from .reference_engine import (
+    TypedFlowUnit,
+    AgentFitness,
+    ReferenceQuantumRouter,
+    WorkerAgent,
+    BossAgent as ReferenceBossAgent,
+    CFOHaltError,
+    default_playbook,
+    run_reference_simulation,
+)
 
 __all__ = [
     "ExecutionMetrics",
@@ -100,5 +110,13 @@ __all__ = [
     "BOSS_AGENT_SYSTEM_PROMPT",
     "BOSS_ACKNOWLEDGEMENT",
     "AGENT_SKILL_SCHEMAS",
+    "TypedFlowUnit",
+    "AgentFitness",
+    "ReferenceQuantumRouter",
+    "WorkerAgent",
+    "ReferenceBossAgent",
+    "CFOHaltError",
+    "default_playbook",
+    "run_reference_simulation",
 ]
-__version__ = "0.5.0"
+__version__ = "0.6.0"

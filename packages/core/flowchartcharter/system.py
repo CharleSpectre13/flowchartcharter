@@ -26,7 +26,7 @@ from .synergy import mean_pair_synergy
 
 
 class FlowChartCharterSystem:
-    """Facade: ST-01…ST-07 + Tensor Routing + Muscle-Memory VDB + Skills."""
+    """Facade: ST-01…ST-07 + Muscle-Memory + Survival pressure + Skills."""
 
     PATHS = DEFAULT_PATHS
 
@@ -94,7 +94,6 @@ class FlowChartCharterSystem:
         self.last_trust = False
         self.token_budget = 50_000
         self.token_spend = 0
-        # Additional seed precedents
         self.memory_store.add(
             MuscleMemoryRecord(
                 charter_id="seed-migration",
@@ -125,7 +124,9 @@ class FlowChartCharterSystem:
         )
         return str(result["chosen_path"])
 
-    def quantum_path_detail(self, agent: Agent, paths: Sequence[str]) -> Dict[str, object]:
+    def quantum_path_detail(
+        self, agent: Agent, paths: Sequence[str]
+    ) -> Dict[str, object]:
         return quantum_path_select(
             paths or self.PATHS,
             agent.muscle_memory_weights,
@@ -168,6 +169,10 @@ class FlowChartCharterSystem:
         noise = self.rng.uniform(-0.08, 0.08)
         return max(0.0, min(1.0, base + noise))
 
+    def _per_agent_ceiling(self) -> int:
+        ops = max(1, sum(1 for a in self.roster if self._is_ops(a)))
+        return max(200, int((self.token_budget - self.token_spend) / ops))
+
     def execute_charter(
         self,
         workload_name: str,
@@ -176,7 +181,7 @@ class FlowChartCharterSystem:
         context_entropy: Optional[float] = None,
         payload: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """ST-01..ST-06 with Muscle-Memory lookup before quantum collapse."""
+        """ST-01..ST-06 with Muscle-Memory + survival-pressure execution."""
         self.router.history.clear()
         self.router._pending.clear()
 
@@ -229,6 +234,7 @@ class FlowChartCharterSystem:
         )
 
         assignments = self.blackboard.volunteer_bind(self.roster)
+        ceiling = self._per_agent_ceiling()
 
         state_vec = [h_ctx, 1.0 - h_ctx, 0.5, strategy.priority]
         payload_for_mm = payload or {
@@ -239,7 +245,6 @@ class FlowChartCharterSystem:
         precedent = self.skills.QueryMuscleMemory(
             state_vec, threshold=0.70, payload=payload_for_mm
         )
-        # Direct Vector DB query (full trajectory + cheat code)
         trajectory = self.muscle_db.query_muscle_memory(
             payload_for_mm,
             similarity_threshold=0.70,
@@ -252,6 +257,7 @@ class FlowChartCharterSystem:
         cfo_reports: List[Dict[str, Any]] = []
         schema_results: List[Dict[str, Any]] = []
         divergences: List[float] = []
+        survival_snaps: List[Dict[str, Any]] = []
         remaining = float(self.token_budget - self.token_spend)
         accelerated = trajectory is not None
 
@@ -266,10 +272,11 @@ class FlowChartCharterSystem:
             )
             cfo_reports.append({"agent": agent.name, **cfo_report})
 
+            # Inject live survival prompt before work
+            agent.refresh_survival_prompt()
+
             if accelerated and trajectory is not None:
-                # Muscle-Memory HIT: reuse first unit of verified path
                 path = trajectory.successful_flow_path[0]
-                # Map playbook ids to path_A/B/lite when needed
                 if path not in self.PATHS and not path.startswith("path_"):
                     path = "path_A" if h_ctx < 0.5 else "path_B"
                 collapse = {
@@ -279,10 +286,7 @@ class FlowChartCharterSystem:
                     "prompt_tweak": trajectory.prompt_tweak,
                     "flow_path": list(trajectory.successful_flow_path),
                     "post_measurement": {"confidence": 1.0, "entropy": 0.0},
-                    "pre_measurement": {
-                        "entropy": 0.0,
-                        "amplitudes": [],
-                    },
+                    "pre_measurement": {"entropy": 0.0, "amplitudes": []},
                     "context_entropy": h_ctx,
                     "cfo_forced": False,
                 }
@@ -307,13 +311,21 @@ class FlowChartCharterSystem:
             elif path == "path_lite":
                 bias -= 0.03
             if accelerated:
-                bias += 0.05  # cheat-code acceleration quality bump
+                bias += 0.05
 
+            # Under survival pressure, prefer cleaner schema path
+            schema_ok_hint = agent.termination_risk_index < 0.55
             m = agent.execute_flow_unit(
                 f"{workload_name} via {path}",
                 rng=self.rng,
                 quality_bias=bias,
-                path=path if path in ("path_A", "path_B", "path_lite") else "path_A",
+                path=(
+                    path
+                    if path in ("path_A", "path_B", "path_lite")
+                    else "path_A"
+                ),
+                token_ceiling=ceiling,
+                expected_schema_ok=schema_ok_hint or accelerated,
             )
             if m:
                 collected.append(m)
@@ -339,8 +351,26 @@ class FlowChartCharterSystem:
                 eval_rm = self.skills.EvaluateRhythmMarker(output, expected)
                 schema_results.append(eval_rm)
                 divergences.append(float(eval_rm["D"]))
+                # Extra ledger hit if rhythm marker fails
+                if not eval_rm.get("passed", True):
+                    agent.record_cycle(
+                        schema_divergence=1,
+                        token_spend=0,
+                        token_ceiling=ceiling,
+                        delta_t=0.1,
+                        structural_drift=float(eval_rm.get("D", 0.5)),
+                        quality=m.quality_score,
+                        path=path,
+                        notes="rhythm_marker_fail",
+                    )
 
-            path_trace[agent.name] = collapse
+            path_trace[agent.name] = {
+                **collapse,
+                "termination_risk_index": agent.termination_risk_index,
+                "survival_status": agent.survival_status.value,
+                "generation": agent.generation.to_dict(),
+            }
+            survival_snaps.append(agent.survival_snapshot())
 
         quality = (
             force_quality
@@ -379,6 +409,7 @@ class FlowChartCharterSystem:
             for agent in self.roster:
                 if not self._is_ops(agent):
                     continue
+                agent.refresh_survival_prompt()
                 collapse = self.skills.ExecuteQuantumCollapse(
                     list(self.PATHS),
                     context_entropy=h_ctx,
@@ -396,6 +427,8 @@ class FlowChartCharterSystem:
                     rng=self.rng,
                     quality_bias=0.15,
                     path=path,
+                    token_ceiling=ceiling,
+                    expected_schema_ok=True,
                 )
                 if m:
                     collected.append(m)
@@ -495,9 +528,11 @@ class FlowChartCharterSystem:
             ),
             "muscle_db_stats": self.muscle_db.stats(),
             "schema_audits": schema_results,
+            "survival": survival_snaps,
             "boss_prompt_loaded": bool(self.boss.system_prompt),
             "foundations_ref": (
-                "charter|flow_units|rhythm_markers|muscle_memory|coach_trust"
+                "charter|flow_units|rhythm_markers|muscle_memory|"
+                "coach_trust|fear_survival"
             ),
         }
         self.checkpointer.append(snap)
@@ -510,7 +545,7 @@ class FlowChartCharterSystem:
     def downtime_sync(
         self, telemetry: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """ST-07 via TriggerMondayMorningSync — commits trajectories to VDB."""
+        """ST-07 — fitness pruning + lean re-hire against Muscle-Memory."""
         tel = telemetry or {
             "path_stats": {
                 "path_A": {"success_rate": 0.92},
@@ -537,12 +572,18 @@ class FlowChartCharterSystem:
                 if s.get("trust")
             ],
         }
+        mm_count = len(self.muscle_db.storage)
+        # Boss pruning with lean re-hire
+        outcomes = self.boss.monday_morning_sync(
+            self.roster,
+            rng=self.rng,
+            muscle_memory_records=mm_count,
+            lean_rehire=True,
+        )
         skill_result = self.skills.TriggerMondayMorningSync(
-            tel, roster=self.roster, boss=self.boss
+            tel, roster=self.roster, boss=None  # outcomes already applied
         )
-        outcomes = skill_result.get("outcomes") or self.boss.monday_morning_sync(
-            self.roster, rng=self.rng
-        )
+        skill_result["outcomes"] = outcomes
 
         fitness_snap = {
             a.name: round(a.calculate_fitness(), 4)
@@ -551,6 +592,12 @@ class FlowChartCharterSystem:
             and getattr(a, "talent_eligible", True)
             and a.history
         }
+        survival_board = [
+            a.survival_snapshot()
+            for a in self.roster
+            if not isinstance(a, BossAgent)
+            and getattr(a, "talent_eligible", True)
+        ]
         muscle_snapshot = {
             a.name: dict(a.muscle_memory_weights)
             for a in self.roster
@@ -573,6 +620,8 @@ class FlowChartCharterSystem:
         )
         for v in guidance:
             self.blackboard.post_vector(v)
+
+        active_ops = sum(1 for a in self.roster if self._is_ops(a))
         return {
             "outcomes": outcomes,
             "ops": ops.to_dict(),
@@ -582,6 +631,9 @@ class FlowChartCharterSystem:
             "muscle_db": self.muscle_db.export_dict(),
             "quantum_lifetime": self.router.summary(),
             "skill_sync": skill_result,
+            "lean_rehire": self.boss.rehire_export(),
+            "survival_board": survival_board,
+            "active_ops_after_prune": active_ops,
             "boss_ack": self.boss_ack,
             "tool_schemas": [s["name"] for s in self.skills.tool_schemas()],
             "blueprint_foundations": [

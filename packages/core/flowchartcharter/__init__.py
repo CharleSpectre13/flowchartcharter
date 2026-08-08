@@ -87,6 +87,18 @@ from .muscle_memory import (
     seed_legacy_refactor,
     run_muscle_memory_simulation,
 )
+from .survival import (
+    SurvivalStatus,
+    GenerationParameters,
+    LedgerEntry,
+    TelemetryLedger,
+    LeanRehireDecision,
+    build_worker_system_prompt,
+    generation_params_for_risk,
+    risk_from_ledger,
+    lean_rehire_check,
+    should_fire_from_ledger,
+)
 
 __all__ = [
     "ExecutionMetrics",
@@ -159,5 +171,15 @@ __all__ = [
     "cosine_similarity",
     "seed_legacy_refactor",
     "run_muscle_memory_simulation",
+    "SurvivalStatus",
+    "GenerationParameters",
+    "LedgerEntry",
+    "TelemetryLedger",
+    "LeanRehireDecision",
+    "build_worker_system_prompt",
+    "generation_params_for_risk",
+    "risk_from_ledger",
+    "lean_rehire_check",
+    "should_fire_from_ledger",
 ]
-__version__ = "0.7.0"
+__version__ = "0.8.0"

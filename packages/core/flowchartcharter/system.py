@@ -8,19 +8,34 @@ from .executive import ExecutiveBoard
 from .foundations import blueprint_export
 from .knowledge_graph import KnowledgeGraph
 from .metrics import ExecutionMetrics
-from .quantum import quantum_path_select
+from .quantum import QuantumRouter, quantum_path_select
 
 
 class FlowChartCharterSystem:
-    """Facade: ST-01 … ST-07 + executive wire + RhythmAudit + Brain-1 KG."""
+    """Facade: ST-01 … ST-07 + QuantumRouter + executive wire + Brain-1 KG."""
 
-    def __init__(self, head_coach: str = "Human Systems Engineer", seed: Optional[int] = None):
+    PATHS = ("path_A", "path_B")
+
+    def __init__(
+        self,
+        head_coach: str = "Human Systems Engineer",
+        seed: Optional[int] = None,
+        *,
+        deterministic_routing: bool = True,
+    ):
         self.head_coach = head_coach
         self.rng = random.Random(seed)
         self.boss = BossAgent("Alpha-GM")
         self.executives = ExecutiveBoard()
         self.knowledge = KnowledgeGraph()
         self.blueprint = blueprint_export()
+        self.router = QuantumRouter(
+            paths=self.PATHS,
+            deterministic=deterministic_routing,
+            rng=self.rng,
+            quality_floor=0.90,
+            lr=0.12,
+        )
         self.roster: List[Agent] = [
             Agent("Worker-1", "Key Player - Data Extraction", {"extraction": 1.0, "general": 0.5}),
             Agent("Worker-2", "Key Player - Validation", {"validation": 1.0, "general": 0.5}),
@@ -28,6 +43,10 @@ class FlowChartCharterSystem:
             Agent("Auditor-1", "Audit Manager", {"audit": 1.0, "general": 0.4}),
             self.executives.validator,
         ]
+        # Slight path bias seeds for demo diversity
+        self.roster[0].muscle_memory_weights = {"path_A": 1.4, "path_B": 0.9}
+        self.roster[1].muscle_memory_weights = {"path_A": 1.0, "path_B": 1.2}
+        self.roster[2].muscle_memory_weights = {"path_A": 1.5, "path_B": 0.7}
         self.blackboard = Blackboard()
         self.checkpointer: List[Dict[str, Any]] = []
         self.last_trust = False
@@ -35,20 +54,21 @@ class FlowChartCharterSystem:
         self.token_spend = 0
 
     def quantum_path_selection(self, agent: Agent, paths: Sequence[str]) -> str:
-        result = quantum_path_select(
-            paths,
-            agent.muscle_memory_weights,
-            rng=self.rng,
-            deterministic=True,
+        result = self.router.route_agent(
+            charter_id="adhoc",
+            agent_name=agent.name,
+            muscle_memory=agent.muscle_memory_weights,
+            marker="adhoc",
         )
         return str(result["chosen_path"])
 
     def quantum_path_detail(self, agent: Agent, paths: Sequence[str]) -> Dict[str, object]:
         return quantum_path_select(
-            paths,
+            paths or self.PATHS,
             agent.muscle_memory_weights,
             rng=self.rng,
-            deterministic=True,
+            deterministic=self.router.deterministic,
+            agent=agent.name,
         )
 
     def _audit_quality(self, metrics: List[ExecutionMetrics]) -> float:
@@ -59,8 +79,20 @@ class FlowChartCharterSystem:
     def _token_sum(self, metrics: List[ExecutionMetrics]) -> int:
         return sum(m.token_cost for m in metrics)
 
+    def _is_ops(self, agent: Agent) -> bool:
+        if agent.status not in (AgentStatus.ACTIVE, AgentStatus.PROMOTED):
+            return False
+        role = agent.role
+        if any(x in role for x in ("Audit", "Validator", "Chief", "Board", "General Manager")):
+            return False
+        return True
+
     def execute_charter(self, workload_name: str, *, force_quality: Optional[float] = None) -> Dict[str, Any]:
-        """Run ST-01..ST-06 with RhythmAudit at ST-04 and quantum path collapse."""
+        """ST-01..ST-06 with QuantumRouter collapse at ST-03 and RhythmAudit at ST-04."""
+        # Fresh router history per charter (amplitude learning persists on agents)
+        self.router.history.clear()
+        self.router._pending.clear()
+
         charter = Charter(
             name=workload_name,
             units=[
@@ -87,21 +119,39 @@ class FlowChartCharterSystem:
 
         assignments = self.blackboard.volunteer_bind(self.roster)
 
+        # ST-03 super-step: quantum collapse per ops agent
         collected: List[ExecutionMetrics] = []
         path_trace: Dict[str, Any] = {}
+        agent_qualities: List[float] = []
+
         for agent in self.roster:
-            if agent.status not in (AgentStatus.ACTIVE, AgentStatus.PROMOTED):
+            if not self._is_ops(agent):
                 continue
-            if "Audit" in agent.role or "Validator" in agent.role or "Chief" in agent.role or "Board" in agent.role:
-                continue
-            detail = self.quantum_path_detail(agent, ["path_A", "path_B"])
-            path = str(detail["chosen_path"])
-            path_trace[agent.name] = detail
+            rec = self.router.collapse(
+                charter_id=workload_name,
+                agent_name=agent.name,
+                muscle_memory=agent.muscle_memory_weights,
+                marker="superstep",
+            )
+            path = rec.chosen_path
             bias = 0.0 if force_quality is None else (force_quality - 0.85)
-            m = agent.execute_flow_unit(f"{workload_name} via {path}", rng=self.rng, quality_bias=bias)
+            m = agent.execute_flow_unit(
+                f"{workload_name} via {path}",
+                rng=self.rng,
+                quality_bias=bias,
+            )
             if m:
                 collected.append(m)
+                agent_qualities.append(m.quality_score)
+                # Reinforce muscle memory from this unit's quality
+                agent.muscle_memory_weights = self.router.observe(
+                    agent.name,
+                    agent.muscle_memory_weights,
+                    m.quality_score,
+                )
+            path_trace[agent.name] = rec.to_dict()
 
+        # ST-04 RhythmAudit (measurement gate)
         quality = force_quality if force_quality is not None else self._audit_quality(collected)
         audit = self.executives.validator.audit(
             workload_name,
@@ -113,23 +163,36 @@ class FlowChartCharterSystem:
         self.blackboard.post_vector(audit)
         charter.state.quality_score = quality
 
+        # ST-05 remediation — re-collapse with updated amplitudes
         while not audit.passed and charter.state.remediation_loops < charter.state.max_remediation:
             charter.state.remediation_loops += 1
+            batch_q: List[float] = []
             for agent in self.roster:
-                if agent.status not in (AgentStatus.ACTIVE, AgentStatus.PROMOTED):
+                if not self._is_ops(agent):
                     continue
-                if "Audit" in agent.role or "Validator" in agent.role:
-                    continue
-                if "Chief" in agent.role or "Board" in agent.role:
-                    continue
+                rec = self.router.collapse(
+                    charter_id=workload_name,
+                    agent_name=agent.name,
+                    muscle_memory=agent.muscle_memory_weights,
+                    marker=f"remediate#{charter.state.remediation_loops}",
+                )
                 m = agent.execute_flow_unit(
-                    f"{workload_name} remediate#{charter.state.remediation_loops}",
+                    f"{workload_name} remediate#{charter.state.remediation_loops} via {rec.chosen_path}",
                     rng=self.rng,
                     quality_bias=0.15,
                 )
                 if m:
                     collected.append(m)
+                    batch_q.append(m.quality_score)
+                    agent.muscle_memory_weights = self.router.observe(
+                        agent.name,
+                        agent.muscle_memory_weights,
+                        m.quality_score,
+                    )
+                path_trace[f"{agent.name}#r{charter.state.remediation_loops}"] = rec.to_dict()
             quality = self._audit_quality(collected[-3:]) if collected else quality
+            if batch_q:
+                agent_qualities.extend(batch_q)
             audit = self.executives.validator.audit(
                 workload_name,
                 marker="gate",
@@ -155,6 +218,9 @@ class FlowChartCharterSystem:
         charter.state.trust_signal = gov.approve_hand_off
         self.last_trust = gov.approve_hand_off
 
+        entanglement = self.router.team_entanglement(agent_qualities)
+        router_summary = self.router.summary()
+
         snap: Dict[str, Any] = {
             "workload": workload_name,
             "quality": quality,
@@ -167,6 +233,8 @@ class FlowChartCharterSystem:
             "governance": gov.to_dict(),
             "budget_halt": budget_vec.halt_if_over,
             "quantum_paths": path_trace,
+            "quantum_summary": router_summary,
+            "entanglement": round(entanglement, 4),
             "foundations_ref": "charter|flow_units|rhythm_markers|muscle_memory|coach_trust",
         }
         self.checkpointer.append(snap)
@@ -177,16 +245,19 @@ class FlowChartCharterSystem:
         return snap
 
     def downtime_sync(self) -> Dict[str, Any]:
-        """ST-07 Monday Morning Sync — async RLAIF + talent + KG global report."""
+        """ST-07 Monday Morning Sync — talent + RLAIF + quantum path report."""
         outcomes = self.boss.monday_morning_sync(self.roster, rng=self.rng)
         fitness_snap = {
             a.name: round(a.calculate_fitness(), 4)
             for a in self.roster
             if not isinstance(a, BossAgent)
-            and "Chief" not in a.role
-            and "Board" not in a.role
             and getattr(a, "talent_eligible", True)
             and a.history
+        }
+        muscle_snapshot = {
+            a.name: dict(a.muscle_memory_weights)
+            for a in self.roster
+            if self._is_ops(a) or a.history
         }
         ops = self.executives.gm_ops_vector(
             "downtime-sync",
@@ -205,13 +276,15 @@ class FlowChartCharterSystem:
         )
         for v in guidance:
             self.blackboard.post_vector(v)
-        kg_global = self.knowledge.global_search("operations")
+        kg_global = self.knowledge.global_search("math")
         return {
             "outcomes": outcomes,
             "ops": ops.to_dict(),
             "guidance": [v.to_dict() for v in guidance],
             "vectors": self.blackboard.recent_vectors(16),
             "knowledge_global": kg_global,
+            "muscle_memory": muscle_snapshot,
+            "quantum_lifetime": self.router.summary(),
             "blueprint_foundations": [f["name"] for f in self.blueprint["foundations"]],
         }
 

@@ -16,7 +16,17 @@ from .vectors import (
 from .executive import CEOAgent, CFOAgent, BoardAgent, RhythmValidatorAgent, ExecutiveBoard
 from .knowledge_graph import KnowledgeGraph, build_ontology
 from .foundations import FOUNDATIONS, foundations_table, blueprint_export, FLOW_UNIT_BLUEPRINT
-from .quantum import quantum_path_select, build_superposition, measure
+from .quantum import (
+    QuantumRouter,
+    quantum_path_select,
+    build_superposition,
+    measure,
+    reinforce,
+    entanglement_score,
+    SuperpositionState,
+    PathAmplitude,
+    MeasurementRecord,
+)
 
 __all__ = [
     "ExecutionMetrics",
@@ -48,8 +58,14 @@ __all__ = [
     "foundations_table",
     "blueprint_export",
     "FLOW_UNIT_BLUEPRINT",
+    "QuantumRouter",
     "quantum_path_select",
     "build_superposition",
     "measure",
+    "reinforce",
+    "entanglement_score",
+    "SuperpositionState",
+    "PathAmplitude",
+    "MeasurementRecord",
 ]
-__version__ = "0.3.0"
+__version__ = "0.4.0"

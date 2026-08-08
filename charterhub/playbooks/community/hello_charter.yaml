@@ -1,0 +1,19 @@
+# Community seed — Hello Charter (minimal zero-to-one example)
+playbook_name: "Hello Charter"
+version: "1.0.0"
+global_cfo_ceiling: 1500
+
+roster_requisition:
+  - role: "Greeter"
+    capabilities: ["general", "json_parsing"]
+
+flow_units:
+  - id: "U1_Greet"
+    description: "Acknowledge the workload and return a structured hello."
+    assigned_role: "Greeter"
+    expected_tokens: 200
+    expected_latency_ms: 100.0
+    schema:
+      greeting: "string"
+      workload_echo: "string"
+      confidence: "float"

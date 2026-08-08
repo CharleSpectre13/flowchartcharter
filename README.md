@@ -4,13 +4,16 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![PyPI](https://img.shields.io/badge/pip-flowchart--charter--engine-green.svg)](https://pypi.org/project/flowchart-charter-engine/)
-[![Version](https://img.shields.io/badge/core-v1.5.0-informational.svg)](packages/core)
+[![Version](https://img.shields.io/badge/core-v1.6.0-informational.svg)](packages/core)
 [![CI](https://img.shields.io/badge/CI-Continuous%20Audit%20Loop-purple.svg)](.github/workflows/audit.yml)
 
 > **Two lines to instantiate a Boss Agent. One YAML file to charter an enterprise.**
 
 ```bash
 pip install flowchart-charter-engine
+fcc version
+fcc --local run library/secops_vulnerability_audit.yaml
+fcc monitor   # Rich live dashboard
 ```
 
 ```python
@@ -128,6 +131,9 @@ Board-driven talent management. Not vibes.
 
 ```bash
 pip install flowchart-charter-engine
+fcc version
+fcc --local run library/secops_vulnerability_audit.yaml
+fcc monitor   # Rich live dashboard
 ```
 
 Optional vector SDKs:
@@ -231,6 +237,23 @@ ST-01 Init → ST-02 Bind → ST-03 Super-step (Live-Wire)
 ```
 
 ---
+
+## Developer CLI (`fcc`)
+
+| Command | Purpose |
+|---------|---------|
+| `fcc run playbook.yaml` | Compile + execute Charterfile |
+| `fcc monitor` | Live Rich TUI (fear, fitness, tokens, film room) |
+| `fcc sync` / `fcc trigger-sync` | Monday Morning Sync |
+| `fcc audit-film` | Analytics Chief 5-day protocol |
+| `fcc submit "job"` | Ad-hoc Boss Agent workload |
+| `fcc library` | List enterprise / CharterHub playbooks |
+
+Offline-safe: if the API is down, pass `--local` for in-memory engine.
+
+## CharterHub
+
+Community playbook ecosystem: [`charterhub/`](charterhub/) — DockerHub for agent workflows.
 
 ## Phase 5 — Enterprise Beta
 

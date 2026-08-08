@@ -276,4 +276,4 @@ __all__ = [
 
 
 _REEXPORT_FITNESS = (DEFAULT_ALPHA, DEFAULT_BETA, DEFAULT_GAMMA, DEFAULT_DELTA)
-__version__ = "1.5.0"
+__version__ = "1.6.0"

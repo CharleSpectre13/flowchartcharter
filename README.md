@@ -62,7 +62,7 @@ python3 -m flowchartcharter
 sh scripts/run_api.sh
 ```
 
-Listens on **`0.0.0.0:8090`** (API; Studio dashboard may use 8080) by default (`FCC_HOST` / `FCC_PORT`).
+Listens on **`0.0.0.0:8090`** by default (`FCC_HOST` / `FCC_PORT`). Studio dashboard may separately use 8080.
 
 ### Endpoints
 
@@ -76,12 +76,12 @@ Listens on **`0.0.0.0:8090`** (API; Studio dashboard may use 8080) by default (`
 | `POST` | `/system/upgrade-personnel` | Living Playbook remap (e.g. `70B` → `1T`) |
 | `GET` | `/health` | Liveness |
 
-Interactive docs: `http://<host>:8080/docs`
+Interactive docs: `http://<host>:8090/docs`
 
 ### Example
 
 ```bash
-curl -s -X POST http://127.0.0.1:8080/workload/submit \
+curl -s -X POST http://127.0.0.1:8090/workload/submit \
   -H 'Content-Type: application/json' \
   -d '{"workload":"Legacy Code Refactor","context_entropy":0.35}'
 ```

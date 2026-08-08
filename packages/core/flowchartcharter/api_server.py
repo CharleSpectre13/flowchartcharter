@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,6 +28,8 @@ from pydantic import BaseModel, Field, field_validator
 from .agents import AgentStatus, BossAgent
 from .system import FlowChartCharterSystem
 from .observability import get_metrics_hub
+from .security import ensure_admin_key_on_boot, require_admin_key
+from .state_persister import get_persister
 
 
 def _repo_root() -> Path:
@@ -202,6 +204,11 @@ class EngineState:
         )
         self.started_at = time.time()
         self.request_count = 0
+        self.restore_report: Dict[str, Any] = {}
+        try:
+            self.restore_report = self.system.restore_state()
+        except Exception as exc:  # noqa: BLE001
+            self.restore_report = {"restored": False, "error": str(exc)}
 
     @property
     def uptime_s(self) -> float:
@@ -244,8 +251,26 @@ def _roster_nodes(system: FlowChartCharterSystem) -> List[RosterNodeStatus]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _STATE
+    boot_security = ensure_admin_key_on_boot()
+    app.state.admin_security = boot_security
+    if boot_security.get("generated"):
+        # Ephemeral key printed once for operator (not in response bodies)
+        print(
+            "[FCC SECURITY] Generated ephemeral FCC_ADMIN_KEY="
+            f"{boot_security.get('key')} — set FCC_ADMIN_KEY in production"
+        )
     _STATE = EngineState()
+    if _STATE.restore_report.get("restored"):
+        print("[FCC STATE] Re-hydrated engine from disk: " f"{_STATE.restore_report}")
+    else:
+        print("[FCC STATE] Fresh engine (no prior state): " f"{_STATE.restore_report}")
     yield
+    # Final flush before shutdown
+    try:
+        if _STATE is not None:
+            _STATE.system.persist_state()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[FCC STATE] shutdown flush failed: {exc}")
     _STATE = None
 
 
@@ -258,7 +283,7 @@ def create_app() -> FastAPI:
             "Submit workloads, load Charterfile YAML playbooks, "
             "query roster TPC, trigger Monday Sync and Analytics Chief."
         ),
-        version="1.5.0",
+        version="1.6.1",
         lifespan=lifespan,
     )
 
@@ -287,7 +312,7 @@ def create_app() -> FastAPI:
         return HealthResponse(
             status="ok",
             engine="FlowChartCharterSystem",
-            version="1.5.0",
+            version="1.6.1",
             uptime_s=round(st.uptime_s, 3),
             days_ready=st.system.analytics.days_ready(),
             roster_size=len(st.system.roster),
@@ -412,7 +437,7 @@ def create_app() -> FastAPI:
             muscle_memory_records=len(system.muscle_db.storage),
             living_playbook_records=len(system.playbook.records),
             analytics=system.analytics.export(),
-            engine_version="1.5.0",
+            engine_version="1.6.1",
         )
 
     @app.post(
@@ -420,7 +445,9 @@ def create_app() -> FastAPI:
         response_model=MondaySyncResponse,
         tags=["system"],
     )
-    async def trigger_monday_sync() -> MondaySyncResponse:
+    async def trigger_monday_sync(
+        _auth: str = Depends(require_admin_key),
+    ) -> MondaySyncResponse:
         """Force GM Monday Morning Sync (closes analytics day + optional EOW)."""
         st = get_state()
         result = await asyncio.to_thread(st.system.downtime_sync)
@@ -444,6 +471,7 @@ def create_app() -> FastAPI:
             True,
             description=("If workweek complete, run end-of-week audit + dossier sync"),
         ),
+        _auth: str = Depends(require_admin_key),
     ) -> AdvanceAnalyticsResponse:
         """Advance Analytics Chief by one day; optionally run 5-day audit."""
         st = get_state()
@@ -475,6 +503,7 @@ def create_app() -> FastAPI:
     )
     async def end_of_week(
         force: bool = Query(True, description="Pad days and force EOW audit"),
+        _auth: str = Depends(require_admin_key),
     ) -> AdvanceAnalyticsResponse:
         """Explicit Analytics Chief end-of-week protocol."""
         st = get_state()
@@ -496,6 +525,7 @@ def create_app() -> FastAPI:
     )
     async def load_playbook(
         file: UploadFile = File(..., description="Charterfile YAML"),
+        _auth: str = Depends(require_admin_key),
     ) -> LoadPlaybookResponse:
         """Upload Charterfile.yaml → compile → hydrate GM/roster/CFO."""
         st = get_state()
@@ -511,6 +541,10 @@ def create_app() -> FastAPI:
                 status_code=400,
                 detail=f"Playbook compile failed: {exc}",
             ) from exc
+        try:
+            st.system.persist_state()
+        except Exception:
+            pass
         return LoadPlaybookResponse(
             playbook_id=str(meta["playbook_id"]),
             playbook_name=str(meta["playbook_name"]),
@@ -541,18 +575,25 @@ def create_app() -> FastAPI:
         return result
 
     @app.get("/system/playbook", tags=["system"])
-    async def get_playbook() -> Dict[str, Any]:
+    async def get_playbook(
+        _auth: str = Depends(require_admin_key),
+    ) -> Dict[str, Any]:
         st = get_state()
         return st.system.compiler.export()
 
     @app.post("/system/upgrade-personnel", tags=["system"])
-    async def upgrade_personnel(body: PersonnelUpgradeRequest) -> Dict[str, Any]:
+    async def upgrade_personnel(
+        body: PersonnelUpgradeRequest,
+        _auth: str = Depends(require_admin_key),
+    ) -> Dict[str, Any]:
         """Cross-generational Living Playbook remap (e.g. 70B → 1T)."""
         st = get_state()
         return st.system.upgrade_personnel(body.model_class)
 
     @app.get("/system/export", tags=["system"])
-    async def system_export() -> Dict[str, Any]:
+    async def system_export(
+        _auth: str = Depends(require_admin_key),
+    ) -> Dict[str, Any]:
         """Debug export: analytics + playbook + muscle stats."""
         st = get_state()
         return {
@@ -567,6 +608,11 @@ def create_app() -> FastAPI:
             "muscle_db": st.system.muscle_db.stats(),
             "requests": st.request_count,
             "uptime_s": round(st.uptime_s, 3),
+            "state_persistence": {
+                "path": str(get_persister().path),
+                "restore": st.restore_report,
+                "saves": get_persister().save_count,
+            },
         }
 
     @app.get("/metrics", tags=["ops"])

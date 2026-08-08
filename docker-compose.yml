@@ -26,7 +26,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: flowchart-charter-engine:1.5.0
+    image: flowchart-charter-engine:1.6.1
     restart: unless-stopped
     depends_on:
       qdrant:
@@ -45,6 +45,9 @@ services:
       FCC_QDRANT_COLLECTION: "flowchartcharter_muscle_memory"
       FCC_CORS_ORIGINS: "*"
       FCC_SEED: "42"
+      FCC_ADMIN_KEY: "${FCC_ADMIN_KEY:-changeme-set-me}"
+      FCC_STATE_PATH: "/app/data/system_state.json"
+      FCC_DATA_DIR: "/app/data"
     volumes:
       - ./examples/charterfiles:/app/charterfiles:ro
       - engine_data:/app/data

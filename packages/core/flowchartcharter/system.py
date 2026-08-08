@@ -20,6 +20,7 @@ from .muscle_memory import (
 )
 from .production import ProductionMuscleMemory, LLMExecutionClient
 from .playbook_compiler import PlaybookCompiler, run_compiled_playbook
+from .state_persister import get_persister
 import os
 from .quantum import (
     DEFAULT_PATHS,
@@ -148,6 +149,7 @@ class FlowChartCharterSystem:
         self.active_playbook_id = None
         self.playbook_routing: Dict[str, Any] = {}
         self.playbook_flow_path: List[str] = []
+        self.persister = get_persister()
         self.memory_store.add(
             MuscleMemoryRecord(
                 charter_id="seed-migration",
@@ -695,6 +697,10 @@ class FlowChartCharterSystem:
         if workload_name in self.blackboard.active_jobs:
             self.blackboard.active_jobs.remove(workload_name)
         charter.bump()
+        try:
+            self.persist_state()
+        except Exception:
+            pass
         return snap
 
     def downtime_sync(self, telemetry: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -784,7 +790,7 @@ class FlowChartCharterSystem:
             self.blackboard.post_vector(v)
 
         active_ops = sum(1 for a in self.roster if self._is_ops(a))
-        return {
+        _sync_result = {
             "outcomes": outcomes,
             "ops": ops.to_dict(),
             "guidance": [v.to_dict() for v in guidance],
@@ -807,6 +813,19 @@ class FlowChartCharterSystem:
             "tool_schemas": [s["name"] for s in self.skills.tool_schemas()],
             "blueprint_foundations": [f["name"] for f in self.blueprint["foundations"]],
         }
+        try:
+            self.persist_state()
+        except Exception:
+            pass
+        return _sync_result
+
+    def persist_state(self) -> str:
+        """Serialize engine state to disk (post-workload / post-sync)."""
+        return self.persister.save(self)
+
+    def restore_state(self) -> dict:
+        """Re-hydrate from FCC_STATE_PATH if present."""
+        return self.persister.restore(self)
 
     def load_playbook(self, source, **kwargs) -> Dict[str, Any]:
         """Compile Charterfile YAML and hydrate GM / roster / CFO state."""
@@ -836,6 +855,10 @@ class FlowChartCharterSystem:
             },
         }
         self.checkpointer.append(snap)
+        try:
+            self.persist_state()
+        except Exception:
+            pass
         return snap
 
     def ontology_export(self) -> Dict[str, Any]:
@@ -846,7 +869,12 @@ class FlowChartCharterSystem:
 
     def advance_analytics_day(self) -> int:
         """Seal one analytics day without full talent sync."""
-        return self.analytics.close_day()
+        day = self.analytics.close_day()
+        try:
+            self.persist_state()
+        except Exception:
+            pass
+        return day
 
     def run_end_of_week_protocol(self, *, force: bool = False) -> Dict[str, Any]:
         """Analytics Chief EOW audit + GM dossier execution (Monday Sync)."""

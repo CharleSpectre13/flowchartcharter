@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "flowchart-charter-engine"
-version = "1.6.0"
+version = "1.6.1"
 description = "Execution-first multi-agent engine: YAML Charterfiles, TPC fear metrics, Muscle-Memory vectors, Boss hierarchy — the process alternative to GraphRAG."
 readme = "README.md"
 requires-python = ">=3.10"

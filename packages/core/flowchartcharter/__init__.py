@@ -119,6 +119,8 @@ from .living_playbook import (
 from .llm_bridge import LLMBridge, LLMNodeOutput, LLMBridgeConfig
 from .simulation_sandbox import SimulationSandbox, run_phase2_sandbox
 from .observability import get_metrics_hub, MetricsHub
+from .state_persister import StatePersister, get_persister
+from .security import require_admin_key, ensure_admin_key_on_boot
 from .playbook_compiler import (
     PlaybookCompiler,
     CompiledPlaybook,
@@ -276,4 +278,4 @@ __all__ = [
 
 
 _REEXPORT_FITNESS = (DEFAULT_ALPHA, DEFAULT_BETA, DEFAULT_GAMMA, DEFAULT_DELTA)
-__version__ = "1.6.0"
+__version__ = "1.6.1"

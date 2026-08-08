@@ -3,9 +3,10 @@ from __future__ import annotations
 import random
 from typing import Any, Dict, List, Optional, Sequence
 
-from .agents import Agent, BossAgent, AgentStatus
+from .agents import Agent, AgentStatus, BossAgent
 from .blackboard import Blackboard, TaskRequest
 from .charter import Charter, FlowUnit
+from .elastic import ElasticRequisitionBoard
 from .executive import ExecutiveBoard
 from .foundations import blueprint_export
 from .knowledge_graph import KnowledgeGraph
@@ -21,12 +22,17 @@ from .quantum import (
     contextual_entropy,
     quantum_path_select,
 )
-from .skills import AgentSkillRuntime, MuscleMemoryRecord, MuscleMemoryStore, init_boss_agent
+from .skills import (
+    AgentSkillRuntime,
+    MuscleMemoryRecord,
+    MuscleMemoryStore,
+    init_boss_agent,
+)
 from .synergy import mean_pair_synergy
 
 
 class FlowChartCharterSystem:
-    """Facade: ST-01…ST-07 + Muscle-Memory + Survival pressure + Skills."""
+    """Facade: ST-01…ST-07 + Muscle-Memory + Survival + Elastic Requisition."""
 
     PATHS = DEFAULT_PATHS
 
@@ -54,25 +60,33 @@ class FlowChartCharterSystem:
         self.muscle_db = MuscleMemoryVectorDB(quiet=True)
         seed_legacy_refactor(self.muscle_db)
         self.memory_store = MuscleMemoryStore(self.muscle_db)
+        self.elastic = ElasticRequisitionBoard()
         self.roster: List[Agent] = [
             Agent(
                 "Worker-1",
                 "Key Player - Data Extraction",
-                {"extraction": 1.0, "general": 0.5},
+                {"extraction": 1.0, "json_parsing": 0.9, "general": 0.5},
             ),
             Agent(
                 "Worker-2",
                 "Key Player - Validation",
-                {"validation": 1.0, "general": 0.5},
+                {"validation": 1.0, "json_parsing": 0.8, "general": 0.5},
             ),
             Agent(
                 "Worker-3",
                 "Position Manager - Synthesizer",
-                {"synthesis": 1.0, "general": 0.6},
+                {
+                    "synthesis": 1.0,
+                    "python_ast": 0.9,
+                    "refactoring": 0.8,
+                    "general": 0.6,
+                },
             ),
             Agent("Auditor-1", "Audit Manager", {"audit": 1.0, "general": 0.4}),
             self.executives.validator,
         ]
+        for a in self.roster:
+            self.elastic.register_agent(a)
         self.roster[0].muscle_memory_weights = {
             "path_A": 1.4, "path_B": 0.9, "path_lite": 0.8,
         }
@@ -144,8 +158,16 @@ class FlowChartCharterSystem:
         return sum(m.token_cost for m in metrics)
 
     def _is_ops(self, agent: Agent) -> bool:
-        if agent.status not in (AgentStatus.ACTIVE, AgentStatus.PROMOTED):
-            return False
+        if agent.status not in (
+            AgentStatus.ACTIVE,
+            AgentStatus.PROMOTED,
+            AgentStatus.PHANTOM,
+        ):
+            if not (
+                getattr(agent, "is_phantom", False)
+                and agent.status != AgentStatus.FIRED
+            ):
+                return False
         role = agent.role
         if any(
             x in role
@@ -166,6 +188,8 @@ class FlowChartCharterSystem:
             k in lower for k in ("api", "integration", "realtime", "telemetry")
         ):
             base = 0.45
+        elif "sql" in lower or "novel" in lower:
+            base = 0.85
         noise = self.rng.uniform(-0.08, 0.08)
         return max(0.0, min(1.0, base + noise))
 
@@ -180,8 +204,9 @@ class FlowChartCharterSystem:
         force_quality: Optional[float] = None,
         context_entropy: Optional[float] = None,
         payload: Optional[Dict[str, Any]] = None,
+        force_capability: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """ST-01..ST-06 with Muscle-Memory + survival-pressure execution."""
+        """ST-01..ST-06 + Muscle-Memory + Survival + Elastic Phantom Nodes."""
         self.router.history.clear()
         self.router._pending.clear()
 
@@ -194,6 +219,15 @@ class FlowChartCharterSystem:
                 else self._payload_entropy(workload_name)
             )
         )
+
+        # V3: Elastic Requisition if capability gap on novel / lean roster
+        phantom = self.elastic.evaluate(
+            workload_name,
+            self.roster,
+            force_capability=force_capability,
+        )
+        if phantom is not None:
+            self.skills.roster = self.roster
 
         charter = Charter(
             name=workload_name,
@@ -271,8 +305,6 @@ class FlowChartCharterSystem:
                 muscle_memory=agent.muscle_memory_weights,
             )
             cfo_reports.append({"agent": agent.name, **cfo_report})
-
-            # Inject live survival prompt before work
             agent.refresh_survival_prompt()
 
             if accelerated and trajectory is not None:
@@ -312,18 +344,18 @@ class FlowChartCharterSystem:
                 bias -= 0.03
             if accelerated:
                 bias += 0.05
+            if getattr(agent, "is_phantom", False):
+                bias += 0.08  # phantoms under pressure must prove quality
 
-            # Under survival pressure, prefer cleaner schema path
             schema_ok_hint = agent.termination_risk_index < 0.55
+            exec_path = (
+                path if path in ("path_A", "path_B", "path_lite") else "path_A"
+            )
             m = agent.execute_flow_unit(
                 f"{workload_name} via {path}",
                 rng=self.rng,
                 quality_bias=bias,
-                path=(
-                    path
-                    if path in ("path_A", "path_B", "path_lite")
-                    else "path_A"
-                ),
+                path=exec_path,
                 token_ceiling=ceiling,
                 expected_schema_ok=schema_ok_hint or accelerated,
             )
@@ -351,7 +383,6 @@ class FlowChartCharterSystem:
                 eval_rm = self.skills.EvaluateRhythmMarker(output, expected)
                 schema_results.append(eval_rm)
                 divergences.append(float(eval_rm["D"]))
-                # Extra ledger hit if rhythm marker fails
                 if not eval_rm.get("passed", True):
                     agent.record_cycle(
                         schema_divergence=1,
@@ -369,6 +400,7 @@ class FlowChartCharterSystem:
                 "termination_risk_index": agent.termination_risk_index,
                 "survival_status": agent.survival_status.value,
                 "generation": agent.generation.to_dict(),
+                "is_phantom": getattr(agent, "is_phantom", False),
             }
             survival_snaps.append(agent.survival_snapshot())
 
@@ -529,10 +561,12 @@ class FlowChartCharterSystem:
             "muscle_db_stats": self.muscle_db.stats(),
             "schema_audits": schema_results,
             "survival": survival_snaps,
+            "phantom_spawned": phantom.name if phantom else None,
+            "elastic": self.elastic.export(),
             "boss_prompt_loaded": bool(self.boss.system_prompt),
             "foundations_ref": (
                 "charter|flow_units|rhythm_markers|muscle_memory|"
-                "coach_trust|fear_survival"
+                "coach_trust|fear_survival|elastic_phantom"
             ),
         }
         self.checkpointer.append(snap)
@@ -545,7 +579,7 @@ class FlowChartCharterSystem:
     def downtime_sync(
         self, telemetry: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """ST-07 — fitness pruning + lean re-hire against Muscle-Memory."""
+        """ST-07 — patched fitness prune + lean re-hire + phantom resolve."""
         tel = telemetry or {
             "path_stats": {
                 "path_A": {"success_rate": 0.92},
@@ -573,17 +607,18 @@ class FlowChartCharterSystem:
             ],
         }
         mm_count = len(self.muscle_db.storage)
-        # Boss pruning with lean re-hire
         outcomes = self.boss.monday_morning_sync(
             self.roster,
             rng=self.rng,
             muscle_memory_records=mm_count,
             lean_rehire=True,
         )
+        phantom_outcomes = self.elastic.resolve_phantoms(self.roster)
         skill_result = self.skills.TriggerMondayMorningSync(
-            tel, roster=self.roster, boss=None  # outcomes already applied
+            tel, roster=self.roster, boss=None
         )
         skill_result["outcomes"] = outcomes
+        skill_result["phantom_outcomes"] = phantom_outcomes
 
         fitness_snap = {
             a.name: round(a.calculate_fitness(), 4)
@@ -632,6 +667,8 @@ class FlowChartCharterSystem:
             "quantum_lifetime": self.router.summary(),
             "skill_sync": skill_result,
             "lean_rehire": self.boss.rehire_export(),
+            "phantom_outcomes": phantom_outcomes,
+            "elastic": self.elastic.export(),
             "survival_board": survival_board,
             "active_ops_after_prune": active_ops,
             "boss_ack": self.boss_ack,

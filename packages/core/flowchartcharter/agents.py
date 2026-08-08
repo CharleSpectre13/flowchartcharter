@@ -22,16 +22,23 @@ from .survival import (
     status_from_risk,
 )
 
+PATH_EXPECTED = {
+    "path_A": {"tokens": 210, "time": 1.2},
+    "path_B": {"tokens": 360, "time": 1.8},
+    "path_lite": {"tokens": 90, "time": 0.7},
+}
+
 
 class AgentStatus(str, Enum):
     ACTIVE = "Active"
     PROMOTED = "Promoted"
     DEMOTED = "Demoted"
     FIRED = "Fired"
+    PHANTOM = "Phantom"
 
 
 class Agent:
-    """Worker node with Fear-Based Accountability survival telemetry."""
+    """Worker node with Fear-Based Accountability + patched fitness telemetry."""
 
     def __init__(
         self,
@@ -50,11 +57,15 @@ class Agent:
             "path_lite": 1.0,
         }
         self.capability_vector = capability_vector or {"general": 1.0}
+        if capability_vector:
+            self.capabilities: List[str] = list(capability_vector.keys())
+        else:
+            self.capabilities = ["general"]
         self.corporate_rank = 1.0
         self.load = 0.0
         self.talent_eligible = True
+        self.is_phantom = False
 
-        # --- Cognitive Survival Constraint ---
         self.survival_status: SurvivalStatus = SurvivalStatus.ACTIVE
         self.termination_risk_index: float = 0.0
         self.ledger = TelemetryLedger()
@@ -73,11 +84,12 @@ class Agent:
         )
 
     def refresh_survival_prompt(self) -> str:
-        """Re-inject live telemetry into the worker system prompt."""
         self.generation = generation_params_for_risk(self.termination_risk_index)
         self.survival_status = status_from_risk(self.termination_risk_index)
         if self.status == AgentStatus.FIRED:
             self.survival_status = SurvivalStatus.TERMINATED
+        elif self.is_phantom or self.status == AgentStatus.PHANTOM:
+            self.survival_status = SurvivalStatus.AT_RISK
         self.system_prompt = self._rebuild_prompt()
         return self.system_prompt
 
@@ -93,7 +105,6 @@ class Agent:
         path: str = "",
         notes: str = "",
     ) -> float:
-        """Append immutable ledger row and recompute termination_risk_index."""
         self.cycle_counter += 1
         entry = LedgerEntry(
             cycle_id=f"{self.id}-C{self.cycle_counter}",
@@ -124,16 +135,33 @@ class Agent:
         token_ceiling: int = 400,
         expected_schema_ok: bool = True,
         structural_drift: float = 0.0,
+        expected_tokens: Optional[int] = None,
+        expected_time: Optional[float] = None,
     ) -> Optional[ExecutionMetrics]:
-        if self.status not in (AgentStatus.ACTIVE, AgentStatus.PROMOTED):
-            return None
-        r = rng or random
+        if self.status not in (
+            AgentStatus.ACTIVE,
+            AgentStatus.PROMOTED,
+            AgentStatus.PHANTOM,
+        ):
+            if not self.is_phantom or self.status == AgentStatus.FIRED:
+                return None
 
-        # Survival pressure biases execution toward determinism:
-        # high risk → lower variance quality, prefer path_lite cost profile
+        r = rng or random
         risk = self.termination_risk_index
         if risk >= 0.55 and path == "path_B":
-            path = "path_lite"  # forced thrift under fear
+            path = "path_lite"
+
+        baseline = PATH_EXPECTED.get(path, PATH_EXPECTED["path_A"])
+        exp_tok = (
+            expected_tokens
+            if expected_tokens is not None
+            else int(baseline["tokens"])
+        )
+        exp_time = (
+            expected_time
+            if expected_time is not None
+            else float(baseline["time"])
+        )
 
         if path == "path_lite":
             cost = r.randint(60, 120)
@@ -142,25 +170,29 @@ class Agent:
         else:
             cost = r.randint(140, 280)
 
-        # latency shrinks slightly under schema_lock (no creative thrash)
         if self.generation.schema_lock:
             time = r.uniform(0.35, 1.4)
         else:
             time = r.uniform(0.4, 2.2)
 
         base_q = r.uniform(0.72, 1.0) + quality_bias
-        # high risk agents cannot "guess" — quality floor rises with schema_lock
         if self.generation.schema_lock:
             base_q = max(base_q, 0.88 + 0.05 * risk)
         quality = min(1.0, max(0.0, base_q))
         synergy = r.uniform(0.82, 1.0)
-        metrics = ExecutionMetrics(cost, time, quality, synergy)
+
+        metrics = ExecutionMetrics(
+            token_cost=cost,
+            execution_time=time,
+            quality_score=quality,
+            synergy_score=synergy,
+            expected_token_cost=exp_tok,
+            expected_time=exp_time,
+        )
         self.history.append(metrics)
         self.load = min(1.0, self.load + 0.1)
 
-        # Telemetry ledger + fear update
         schema_div = 0 if expected_schema_ok else 1
-        # structural drift from quality shortfall when unlocked
         drift = structural_drift
         if not expected_schema_ok:
             drift = max(drift, 0.4)
@@ -191,27 +223,31 @@ class Agent:
         for k, v in task_embedding.items():
             score += v * self.capability_vector.get(k, 0.0)
         score *= self.corporate_rank
-        # elevated risk agents volunteer less aggressively
         score *= max(0.2, 1.0 - 0.5 * self.termination_risk_index)
         score /= (1.0 + self.load) * max(temperature, 1e-6)
         return score
 
     def survival_snapshot(self) -> Dict[str, Any]:
+        fit = (
+            round(self.calculate_fitness(), 4) if self.history else 0.0
+        )
         return {
             "agent": self.name,
             "id": self.id,
             "role": self.role,
             "status": self.status.value,
+            "is_phantom": self.is_phantom,
             "survival_status": self.survival_status.value,
             "termination_risk_index": round(self.termination_risk_index, 4),
             "generation": self.generation.to_dict(),
             "ledger": self.ledger.export(),
-            "fitness": round(self.calculate_fitness(), 4) if self.history else 0.0,
+            "fitness": fit,
+            "capabilities": list(getattr(self, "capabilities", [])),
         }
 
 
 class BossAgent(Agent):
-    """General Manager — Head Coach system prompt + pruning / lean re-hire."""
+    """General Manager — pruning, lean re-hire, elastic requisition hooks."""
 
     def __init__(self, name: str):
         super().__init__(name, "General Manager (Boss)")
@@ -221,9 +257,9 @@ class BossAgent(Agent):
         self.system_prompt = BOSS_AGENT_SYSTEM_PROMPT
         self.acknowledged = False
         self.rehire_log: List[LeanRehireDecision] = []
-        # Boss is not under worker survival pressure
         self.survival_status = SurvivalStatus.ACTIVE
         self.termination_risk_index = 0.0
+        self.is_phantom = False
 
     def acknowledge_directive(self) -> str:
         self.acknowledged = True
@@ -238,18 +274,23 @@ class BossAgent(Agent):
         muscle_memory_records: int = 0,
         lean_rehire: bool = True,
     ) -> Dict[str, str]:
-        """ST-07 — fitness + ledger pruning; lean re-hire declines backfill."""
         r = rng or random
         outcomes: Dict[str, str] = {}
         self.rehire_log = []
 
-        # Count pre-prune ops for lean check baseline
         for agent in team:
             if isinstance(agent, BossAgent):
                 continue
             if not getattr(agent, "talent_eligible", True):
                 continue
             if not agent.history and agent.ledger.schema_errors == 0:
+                if getattr(agent, "is_phantom", False):
+                    agent.status = AgentStatus.FIRED
+                    agent.survival_status = SurvivalStatus.TERMINATED
+                    outcomes[agent.name] = "FIRED"
+                    self.playbook.append(
+                        f"Fire unproven phantom {agent.name}"
+                    )
                 continue
 
             f = agent.calculate_fitness() if agent.history else 0.0
@@ -274,7 +315,11 @@ class BossAgent(Agent):
                         for a in team
                         if not isinstance(a, BossAgent)
                         and a.status
-                        in (AgentStatus.ACTIVE, AgentStatus.PROMOTED)
+                        in (
+                            AgentStatus.ACTIVE,
+                            AgentStatus.PROMOTED,
+                            AgentStatus.PHANTOM,
+                        )
                         and getattr(a, "talent_eligible", True)
                     )
                     decision = lean_rehire_check(
@@ -285,14 +330,26 @@ class BossAgent(Agent):
                     self.rehire_log.append(decision)
                     self.playbook.append(
                         f"Lean re-hire {agent.name}: backfill="
-                        f"{decision.backfill} ({decision.reason[:60]})"
+                        f"{decision.backfill}"
                     )
+                continue
+
+            if getattr(agent, "is_phantom", False) and f >= benchmark * 1.15:
+                agent.status = AgentStatus.PROMOTED
+                agent.is_phantom = False
+                agent.termination_risk_index = max(
+                    0.0, agent.termination_risk_index - 0.3
+                )
+                agent.refresh_survival_prompt()
+                outcomes[agent.name] = "PHANTOM_HIRED"
+                self.playbook.append(
+                    f"Convert phantom {agent.name}: F={f:.3f}"
+                )
                 continue
 
             if f >= benchmark * 1.2 and risk < 0.35:
                 agent.status = AgentStatus.PROMOTED
                 agent.corporate_rank = min(10.0, agent.corporate_rank + 1.0)
-                # promotion slightly reduces risk (earned trust)
                 agent.termination_risk_index = max(
                     0.0, agent.termination_risk_index - 0.08
                 )

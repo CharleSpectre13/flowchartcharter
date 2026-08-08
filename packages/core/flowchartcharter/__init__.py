@@ -6,11 +6,17 @@ from .charter import FlowUnit, Charter, CharterState
 from .system import FlowChartCharterSystem
 from .fitness import (
     fitness,
+    fitness_components,
+    speed_score,
+    token_bloat_penalty,
+    reference_node_fitness,
+    risk_from_fitness,
     DEFAULT_ALPHA,
     DEFAULT_BETA,
     DEFAULT_GAMMA,
     DEFAULT_DELTA,
     COST_NORM,
+    INDUSTRY_BENCHMARK,
 )
 from .vectors import (
     StrategyVector,
@@ -99,6 +105,7 @@ from .survival import (
     lean_rehire_check,
     should_fire_from_ledger,
 )
+from .elastic import ElasticRequisitionBoard, PhantomRecord
 
 __all__ = [
     "ExecutionMetrics",
@@ -112,7 +119,13 @@ __all__ = [
     "CharterState",
     "FlowChartCharterSystem",
     "fitness",
+    "fitness_components",
+    "speed_score",
+    "token_bloat_penalty",
+    "reference_node_fitness",
+    "risk_from_fitness",
     "COST_NORM",
+    "INDUSTRY_BENCHMARK",
     "StrategyVector",
     "BudgetVector",
     "GovernanceVector",
@@ -181,5 +194,7 @@ __all__ = [
     "risk_from_ledger",
     "lean_rehire_check",
     "should_fire_from_ledger",
+    "ElasticRequisitionBoard",
+    "PhantomRecord",
 ]
-__version__ = "0.8.0"
+__version__ = "0.9.0"

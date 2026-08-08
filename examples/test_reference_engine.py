@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Tests for the Architectural Reference engine (PEP8-clean)."""
+"""Tests for the Architectural Reference engine (PEP8-clean, audit-patched)."""
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from flowchartcharter.reference_engine import (  # noqa: E402
     default_playbook,
     run_reference_simulation,
 )
+from flowchartcharter.fitness import reference_node_fitness  # noqa: E402
 
 
 def test_flow_unit_validation() -> None:
@@ -69,23 +71,46 @@ def test_high_entropy_prefers_cleansing() -> None:
     print("OK high H_ctx →", messy.id)
 
 
-def test_fitness_formula() -> None:
-    router = ReferenceQuantumRouter(alpha=1.0, beta=0.5, gamma=0.2)
+def test_fitness_formula_patched() -> None:
+    """Patched math: perfect quality, on-budget tokens, nominal latency."""
+    router = ReferenceQuantumRouter(alpha=1.0, beta=0.5, gamma=0.8)
     worker = WorkerAgent("T", "Tester")
     worker.fitness = AgentFitness(
         q_success=50,
         q_total=50,
+        actual_latency_ms=100.0,
+        actual_tokens_used=500,
+        expected_tokens=500,
+        expected_latency_ms=100.0,
+        entanglement_errors=0,
         delta_t_ms=100.0,
         total_tokens=500,
-        entanglement_errors=0,
     )
     score = worker.calculate_overall_fitness(router)
-    expected = 1.0 * 1.0 + 0.5 * 10.0 - 0.2 * 0.5 + 1.0
+    expected = reference_node_fitness(
+        q_success=50,
+        q_total=50,
+        actual_latency_ms=100.0,
+        actual_tokens=500,
+        expected_tokens=500,
+        expected_latency_ms=100.0,
+        entanglement_errors=0,
+        alpha=1.0,
+        beta=0.5,
+        gamma=0.8,
+    )
     assert abs(score - expected) < 1e-9
-    print("OK fitness", round(score, 3))
+    assert math.isfinite(score)
+    # near-instant must stay bounded
+    worker.fitness.actual_latency_ms = 0.001
+    worker.fitness.delta_t_ms = 0.001
+    fast = worker.calculate_overall_fitness(router)
+    assert math.isfinite(fast) and fast < 5.0
+    print("OK fitness patched", round(score, 3), round(fast, 3))
 
 
 def test_monday_morning_sync() -> None:
+    """A2 heavy work RETAINED; A1 schema errors FIRED; A3 PROMOTED."""
     gm = BossAgent(quiet=True)
     gm.add_agent(WorkerAgent("A1", "Data Cleanser"))
     gm.add_agent(WorkerAgent("A2", "Code Generator"))
@@ -93,7 +118,8 @@ def test_monday_morning_sync() -> None:
     apply_reference_telemetry(gm)
 
     sync = gm.monday_morning_sync()
-    assert sync["outcomes"]["A2"] == "FIRED"
+    assert sync["outcomes"]["A1"] == "FIRED"
+    assert sync["outcomes"]["A2"] != "FIRED"  # delta-token protects hard work
     assert sync["outcomes"]["A3"] == "PROMOTED"
     print("OK monday sync", sync["outcomes"])
 
@@ -101,7 +127,8 @@ def test_monday_morning_sync() -> None:
 def test_full_simulation() -> None:
     result = run_reference_simulation(quiet=True)
     assert result["chosen_path"]["id"] == "U1"
-    assert result["roster_status"]["A2"] == "FIRED"
+    assert result["roster_status"]["A2"] != "FIRED"
+    assert result["roster_status"]["A1"] == "FIRED"
     assert result["roster_status"]["A3"] == "PROMOTED"
     assert result["messy_path"]["id"] == "U3"
     print("OK full simulation")
@@ -113,7 +140,7 @@ if __name__ == "__main__":
     test_collapse_filters_cfo()
     test_cfo_halt()
     test_high_entropy_prefers_cleansing()
-    test_fitness_formula()
+    test_fitness_formula_patched()
     test_monday_morning_sync()
     test_full_simulation()
     print("ALL_REFERENCE_ENGINE_TESTS_PASSED")

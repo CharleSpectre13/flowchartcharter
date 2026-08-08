@@ -115,6 +115,7 @@ from .living_playbook import (
     objective_signature_from_payload,
     capability_map_from_path,
 )
+from .llm_bridge import LLMBridge, LLMNodeOutput, LLMBridgeConfig
 from .analytics import (
     AnalyticsChief,
     RosterRecommendationDossier,
@@ -226,5 +227,9 @@ __all__ = [
     "AgentTrend",
     "CheatCodeExtraction",
     "WORKWEEK_DAYS",
+    "LLMBridge",
+    "LLMNodeOutput",
+    "LLMBridgeConfig",
 ]
-__version__ = "1.1.0"
+
+__version__ = "1.2.0"

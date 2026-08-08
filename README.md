@@ -4,7 +4,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![PyPI](https://img.shields.io/badge/pip-flowchart--charter--engine-green.svg)](https://pypi.org/project/flowchart-charter-engine/)
-[![Version](https://img.shields.io/badge/core-v1.4.0-informational.svg)](packages/core)
+[![Version](https://img.shields.io/badge/core-v1.5.0-informational.svg)](packages/core)
 [![CI](https://img.shields.io/badge/CI-Continuous%20Audit%20Loop-purple.svg)](.github/workflows/audit.yml)
 
 > **Two lines to instantiate a Boss Agent. One YAML file to charter an enterprise.**
@@ -231,6 +231,23 @@ ST-01 Init → ST-02 Bind → ST-03 Super-step (Live-Wire)
 ```
 
 ---
+
+## Phase 5 — Enterprise Beta
+
+### Observability
+`GET /metrics` — Prometheus (fear index, entanglement errors, token spend, active nodes).
+
+### Playbook library
+Zero-to-one Charterfiles in `library/`:
+- `secops_vulnerability_audit.yaml`
+- `legacy_to_react_migration.yaml`
+- `unstructured_data_etl.yaml`
+
+### Live Sandbox UI
+```bash
+PYTHONPATH=packages/core python scripts/serve_dashboard.py
+# open http://localhost:8090/ui/
+```
 
 ## Continuous Audit Loop
 

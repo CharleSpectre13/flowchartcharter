@@ -1,0 +1,63 @@
+# Enterprise Playbook Library — Unstructured Data ETL
+# Production Charterfile: ingest messy sources → cleanse → strict JSON product
+playbook_name: "Unstructured Data ETL"
+version: "1.0.0"
+global_cfo_ceiling: 6000
+
+roster_requisition:
+  - role: "Ingest_Operator"
+    capabilities: ["file_io", "encoding_detect", "chunking"]
+  - role: "Data_Sanitizer"
+    capabilities: ["json_parsing", "regex", "pii_redact"]
+  - role: "Schema_Enforcer"
+    capabilities: ["json_schema", "type_coerce", "validation"]
+  - role: "Quality_Auditor"
+    capabilities: ["row_stats", "anomaly_detect", "report_generation"]
+
+flow_units:
+  - id: "U1_Ingest_Raw"
+    description: "Load unstructured payloads; detect encoding and split batches."
+    assigned_role: "Ingest_Operator"
+    expected_tokens: 700
+    expected_latency_ms: 300.0
+    schema:
+      batch_id: "string"
+      source_uri: "string"
+      record_count: "int"
+      encoding: "string"
+      raw_sample: "string"
+
+  - id: "U2_Sanitize_PII"
+    description: "Strip noise, normalize whitespace, redact PII fields."
+    assigned_role: "Data_Sanitizer"
+    expected_tokens: 1100
+    expected_latency_ms: 500.0
+    schema:
+      clean_records: "int"
+      pii_redactions: "int"
+      dropped_rows: "int"
+      sanitizer_notes: "list[string]"
+
+  - id: "U3_Enforce_JSON_Schema"
+    description: "Coerce types and validate every row against target JSON schema."
+    assigned_role: "Schema_Enforcer"
+    expected_tokens: 1300
+    expected_latency_ms: 550.0
+    schema:
+      valid_rows: "int"
+      invalid_rows: "int"
+      schema_version: "string"
+      sample_output: "string"
+      error_codes: "list[string]"
+
+  - id: "U4_Quality_Gate"
+    description: "Statistical QA gate; emit load-ready JSON + quality certificate."
+    assigned_role: "Quality_Auditor"
+    expected_tokens: 800
+    expected_latency_ms: 350.0
+    schema:
+      quality_score: "float"
+      anomaly_flags: "list[string]"
+      certificate_id: "string"
+      load_approved: "bool"
+      metrics_json: "string"

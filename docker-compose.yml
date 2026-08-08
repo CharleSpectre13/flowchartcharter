@@ -26,7 +26,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: flowchart-charter-engine:1.4.0
+    image: flowchart-charter-engine:1.5.0
     restart: unless-stopped
     depends_on:
       qdrant:

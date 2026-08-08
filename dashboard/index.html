@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FlowChartCharter Live Sandbox</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --panel: #121820;
+      --panel2: #1a2330;
+      --border: #2a3544;
+      --text: #e8eef6;
+      --muted: #8b9bb0;
+      --accent: #3dd6c6;
+      --accent2: #6ea8fe;
+      --warn: #f0b429;
+      --danger: #f07178;
+      --ok: #7fd962;
+      --radius: 12px;
+      --font: "IBM Plex Sans", system-ui, sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      font-family: var(--font); color: var(--text);
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #1a2a3a 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #142828 0%, transparent 50%),
+        var(--bg);
+    }
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 10;
+      background: rgba(11,15,20,0.85);
+    }
+    header h1 { margin: 0; font-size: 1.15rem; letter-spacing: 0.02em; }
+    header h1 span { color: var(--accent); font-weight: 600; }
+    .badge {
+      font-family: var(--mono); font-size: 0.72rem;
+      padding: 0.25rem 0.55rem; border-radius: 999px;
+      border: 1px solid var(--border); color: var(--muted);
+    }
+    .badge.live { border-color: var(--ok); color: var(--ok); }
+    main {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 1rem; padding: 1rem 1.5rem 2rem;
+      max-width: 1280px; margin: 0 auto;
+    }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+    .card {
+      background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 1rem 1.1rem; box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+    }
+    .card h2 {
+      margin: 0 0 0.75rem; font-size: 0.85rem; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--muted); font-weight: 600;
+    }
+    label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.35rem; }
+    textarea, input, select {
+      width: 100%; background: #0a1018; color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.65rem 0.75rem; font-family: var(--mono); font-size: 0.85rem;
+    }
+    textarea { min-height: 88px; resize: vertical; }
+    .row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.75rem; }
+    button {
+      appearance: none; border: none; cursor: pointer;
+      font-family: var(--font); font-weight: 600; font-size: 0.85rem;
+      padding: 0.6rem 1rem; border-radius: 8px;
+      background: var(--accent); 
+      color: #041a18; transition: transform 0.1s ease, filter 0.15s;
+    }
+    button:hover { filter: brightness(1.08); }
+    button:active { transform: scale(0.98); }
+    button.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    button.danger { background: var(--danger); color: #1a0505; }
+    .metrics {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem;
+    }
+    .metric {
+      background: #0a1018; border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.65rem 0.7rem;
+    }
+    .metric .k { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .metric .v { font-family: var(--mono); font-size: 1.15rem; margin-top: 0.2rem; color: var(--accent2); }
+    .log {
+      font-family: var(--mono); font-size: 0.75rem; line-height: 1.45;
+      background: #070b10; border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.75rem; max-height: 280px; overflow: auto; white-space: pre-wrap;
+      color: #c5d4e8;
+    }
+    .roster { display: flex; flex-direction: column; gap: 0.45rem; }
+    .node {
+      display: grid; grid-template-columns: 1fr auto auto; gap: 0.5rem; align-items: center;
+      padding: 0.5rem 0.65rem; border-radius: 8px; background: #0a1018; border: 1px solid var(--border);
+      font-size: 0.82rem;
+    }
+    .node .name { font-weight: 600; }
+    .fear { font-family: var(--mono); color: var(--warn); }
+    .fit { font-family: var(--mono); color: var(--ok); }
+    .drop {
+      border: 1.5px dashed var(--border); border-radius: 10px; padding: 1rem;
+      text-align: center; color: var(--muted); font-size: 0.85rem;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .drop.hot { border-color: var(--accent); background: rgba(61,214,198,0.06); color: var(--accent); }
+    footer { text-align: center; color: var(--muted); font-size: 0.75rem; padding: 0 1rem 1.5rem; }
+    a { color: var(--accent2); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>FlowChartCharter <span>Live Sandbox</span></h1>
+    <div class="badge" id="healthBadge">connecting…</div>
+  </header>
+  <main>
+    <section class="card">
+      <h2>Workload</h2>
+      <label for="workload">Job description</label>
+      <textarea id="workload">Legacy Code Refactor</textarea>
+      <div class="row">
+        <div style="flex:1;min-width:120px">
+          <label for="entropy">Context entropy</label>
+          <input id="entropy" type="number" min="0" max="1" step="0.05" value="0.35" />
+        </div>
+      </div>
+      <div class="row">
+        <button id="btnSubmit">Submit to Boss Agent</button>
+        <button class="secondary" id="btnMonday">Monday Sync</button>
+        <button class="secondary" id="btnAnalytics">+1 Analytics Day</button>
+      </div>
+      <h2 style="margin-top:1.25rem">Charterfile drop</h2>
+      <div class="drop" id="dropZone">
+        Drag & drop a .yaml Charterfile here<br />
+        <span style="font-size:0.75rem">or click to browse</span>
+        <input type="file" id="fileInput" accept=".yaml,.yml" hidden />
+      </div>
+      <div class="row">
+        <button class="secondary" id="btnExecCompiled">Execute Compiled Playbook</button>
+        <select id="librarySelect" style="flex:1">
+          <option value="">Load library playbook…</option>
+          <option value="secops_vulnerability_audit.yaml">SecOps Vulnerability Audit</option>
+          <option value="legacy_to_react_migration.yaml">Legacy → React Migration</option>
+          <option value="unstructured_data_etl.yaml">Unstructured Data ETL</option>
+          <option value="legacy_auth_refactor.yaml">Legacy Auth Refactor</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Live Telemetry</h2>
+      <div class="metrics">
+        <div class="metric"><div class="k">Quality</div><div class="v" id="mQuality">—</div></div>
+        <div class="metric"><div class="k">Trust</div><div class="v" id="mTrust">—</div></div>
+        <div class="metric"><div class="k">Tokens</div><div class="v" id="mTokens">—</div></div>
+        <div class="metric"><div class="k">Playbook</div><div class="v" id="mMode" style="font-size:0.85rem">—</div></div>
+        <div class="metric"><div class="k">Active Ops</div><div class="v" id="mOps">—</div></div>
+        <div class="metric"><div class="k">Latency</div><div class="v" id="mLat">—</div></div>
+      </div>
+      <h2 style="margin-top:1rem">Roster (Fear / Fitness)</h2>
+      <div class="roster" id="roster"></div>
+      <h2 style="margin-top:1rem">Event log</h2>
+      <div class="log" id="log">Ready.\n</div>
+    </section>
+  </main>
+  <footer>
+    FlowChartCharter Enterprise Beta ·
+    <a href="/docs" target="_blank">API docs</a> ·
+    <a href="/metrics" target="_blank">/metrics</a> ·
+    TPC · Muscle-Memory · Analytics Chief
+  </footer>
+  <script>
+    const API = window.FCC_API_BASE || "";
+    const logEl = document.getElementById("log");
+    function log(msg) {
+      const ts = new Date().toISOString().slice(11, 19);
+      logEl.textContent = `[${ts}] ${msg}\n` + logEl.textContent;
+    }
+    async function jfetch(path, opts = {}) {
+      const res = await fetch(API + path, opts);
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); } catch { data = { raw: text }; }
+      if (!res.ok) throw new Error(data.detail || data.error || res.statusText);
+      return data;
+    }
+    async function refreshHealth() {
+      try {
+        const h = await jfetch("/health");
+        const b = document.getElementById("healthBadge");
+        b.textContent = `LIVE v${h.version} · ${h.roster_size} nodes`;
+        b.classList.add("live");
+      } catch (e) {
+        document.getElementById("healthBadge").textContent = "offline";
+      }
+    }
+    async function refreshRoster() {
+      try {
+        const r = await jfetch("/roster/status");
+        document.getElementById("mOps").textContent = r.active_ops;
+        const box = document.getElementById("roster");
+        box.innerHTML = "";
+        (r.roster || []).forEach((n) => {
+          const d = document.createElement("div");
+          d.className = "node";
+          d.innerHTML = `<div class="name">${n.name}<div style="color:var(--muted);font-size:0.72rem">${n.role}</div></div>
+            <div class="fear">fear ${Number(n.termination_risk_index).toFixed(3)}</div>
+            <div class="fit">F ${Number(n.fitness).toFixed(3)}</div>`;
+          box.appendChild(d);
+        });
+      } catch (e) { log("roster error: " + e.message); }
+    }
+    document.getElementById("btnSubmit").onclick = async () => {
+      const workload = document.getElementById("workload").value.trim();
+      const entropy = parseFloat(document.getElementById("entropy").value);
+      try {
+        log("submit → " + workload);
+        const out = await jfetch("/workload/submit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workload, context_entropy: entropy }),
+        });
+        document.getElementById("mQuality").textContent = Number(out.quality).toFixed(3);
+        document.getElementById("mTrust").textContent = out.trust ? "YES" : "no";
+        document.getElementById("mTokens").textContent = out.token_spend;
+        document.getElementById("mMode").textContent = out.playbook_mode || "—";
+        document.getElementById("mLat").textContent = out.elapsed_ms + "ms";
+        log(`OK quality=${out.quality.toFixed(3)} trust=${out.trust} live_wire=${out.live_wire}`);
+        await refreshRoster();
+      } catch (e) { log("submit failed: " + e.message); }
+    };
+    document.getElementById("btnMonday").onclick = async () => {
+      try {
+        const out = await jfetch("/system/trigger-monday-sync", { method: "POST" });
+        log("Monday Sync: " + JSON.stringify(out.outcomes));
+        await refreshRoster();
+      } catch (e) { log("monday failed: " + e.message); }
+    };
+    document.getElementById("btnAnalytics").onclick = async () => {
+      try {
+        const out = await jfetch("/system/advance-analytics?run_eow_if_ready=true", { method: "POST" });
+        log(`analytics day=${out.day_closed} ready=${out.days_ready} eow=${out.dossier_driven}`);
+      } catch (e) { log("analytics failed: " + e.message); }
+    };
+    async function uploadYaml(file) {
+      const fd = new FormData();
+      fd.append("file", file, file.name);
+      const out = await jfetch("/system/load-playbook", { method: "POST", body: fd });
+      log(`playbook loaded: ${out.playbook_name} v${out.version} units=${out.flow_path.length}`);
+      document.getElementById("workload").value = out.playbook_name;
+      await refreshRoster();
+    }
+    const drop = document.getElementById("dropZone");
+    const fileInput = document.getElementById("fileInput");
+    drop.onclick = () => fileInput.click();
+    fileInput.onchange = () => { if (fileInput.files[0]) uploadYaml(fileInput.files[0]).catch(e => log(e.message)); };
+    drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("hot"); };
+    drop.ondragleave = () => drop.classList.remove("hot");
+    drop.ondrop = (e) => {
+      e.preventDefault(); drop.classList.remove("hot");
+      const f = e.dataTransfer.files[0];
+      if (f) uploadYaml(f).catch(err => log(err.message));
+    };
+    document.getElementById("btnExecCompiled").onclick = async () => {
+      const workload = document.getElementById("workload").value.trim();
+      try {
+        const out = await jfetch("/system/execute-compiled", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workload }),
+        });
+        document.getElementById("mQuality").textContent = Number(out.quality || 0).toFixed(3);
+        document.getElementById("mTrust").textContent = out.trust ? "YES" : "no";
+        document.getElementById("mTokens").textContent = out.token_spend;
+        document.getElementById("mMode").textContent = "compiled";
+        log(`compiled units ${out.units_ok}/${out.units_total} path=${(out.flow_path||[]).join(" → ")}`);
+        await refreshRoster();
+      } catch (e) { log("execute-compiled: " + e.message); }
+    };
+    document.getElementById("librarySelect").onchange = async (e) => {
+      const name = e.target.value;
+      if (!name) return;
+      try {
+        const res = await fetch(API + "/library/" + name);
+        if (!res.ok) throw new Error("library fetch failed");
+        const blob = await res.blob();
+        await uploadYaml(new File([blob], name, { type: "application/yaml" }));
+      } catch (err) { log(err.message); }
+    };
+    refreshHealth();
+    refreshRoster();
+    setInterval(refreshRoster, 8000);
+  </script>
+</body>
+</html>

@@ -18,3 +18,6 @@ fi
 
 echo "[entrypoint] FlowChartCharter API on ${FCC_HOST}:${FCC_PORT}"
 exec "$@"
+
+export FCC_LIBRARY_DIR="${FCC_LIBRARY_DIR:-/app/library}"
+export FCC_DASHBOARD_DIR="${FCC_DASHBOARD_DIR:-/app/dashboard}"

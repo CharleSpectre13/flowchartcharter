@@ -1,0 +1,29 @@
+# FlowChartCharter Charterfile — Head Coach DSL
+playbook_name: "Legacy Auth Refactor"
+version: "1.0.0"
+global_cfo_ceiling: 3500
+
+roster_requisition:
+  - role: "Data_Sanitizer"
+    capabilities: ["json_parsing", "regex"]
+  - role: "Code_Architect"
+    capabilities: ["python_ast", "security_refactor"]
+
+flow_units:
+  - id: "U1_Ingest_Clean"
+    description: "Sanitize incoming legacy code, strip dead comments."
+    assigned_role: "Data_Sanitizer"
+    expected_tokens: 500
+    expected_latency_ms: 200.0
+    schema:
+      clean_code: "string"
+      variables_found: "list[string]"
+
+  - id: "U2_Secure_Tokens"
+    description: "Replace legacy auth with modern Bearer token structure."
+    assigned_role: "Code_Architect"
+    expected_tokens: 1500
+    expected_latency_ms: 800.0
+    schema:
+      refactored_code: "string"
+      security_rating: "float"

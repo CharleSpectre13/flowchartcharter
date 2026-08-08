@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "flowchart-charter-engine"
-version = "1.4.0"
+version = "1.5.0"
 description = "Execution-first multi-agent engine: YAML Charterfiles, TPC fear metrics, Muscle-Memory vectors, Boss hierarchy — the process alternative to GraphRAG."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -45,6 +45,7 @@ dependencies = [
   "pydantic>=2.0.0",
   "pyyaml>=6.0",
   "python-multipart>=0.0.9",
+  "prometheus_client>=0.20.0",
 ]
 
 [project.optional-dependencies]

@@ -118,6 +118,7 @@ from .living_playbook import (
 )
 from .llm_bridge import LLMBridge, LLMNodeOutput, LLMBridgeConfig
 from .simulation_sandbox import SimulationSandbox, run_phase2_sandbox
+from .observability import get_metrics_hub, MetricsHub
 from .playbook_compiler import (
     PlaybookCompiler,
     CompiledPlaybook,
@@ -269,8 +270,10 @@ __all__ = [
     "generate_pydantic_model",
     "hydrate_system",
     "run_compiled_playbook",
+    "get_metrics_hub",
+    "MetricsHub",
 ]
 
 
 _REEXPORT_FITNESS = (DEFAULT_ALPHA, DEFAULT_BETA, DEFAULT_GAMMA, DEFAULT_DELTA)
-__version__ = "1.4.0"
+__version__ = "1.5.0"

@@ -15,15 +15,44 @@ import os
 import time
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 from .agents import AgentStatus, BossAgent
 from .system import FlowChartCharterSystem
+from .observability import get_metrics_hub
+
+
+def _repo_root() -> Path:
+    # packages/core/flowchartcharter/api_server.py → repo root
+    return Path(__file__).resolve().parents[3]
+
+
+def _dashboard_dir() -> Path:
+    env = os.environ.get("FCC_DASHBOARD_DIR")
+    if env:
+        return Path(env)
+    cand = _repo_root() / "dashboard"
+    if cand.is_dir():
+        return cand
+    return Path(__file__).resolve().parent / "static_dashboard"
+
+
+def _library_dir() -> Path:
+    env = os.environ.get("FCC_LIBRARY_DIR")
+    if env:
+        return Path(env)
+    cand = _repo_root() / "library"
+    if cand.is_dir():
+        return cand
+    return Path(__file__).resolve().parent / "library"
 
 
 class WorkloadSubmitRequest(BaseModel):
@@ -229,7 +258,7 @@ def create_app() -> FastAPI:
             "Submit workloads, load Charterfile YAML playbooks, "
             "query roster TPC, trigger Monday Sync and Analytics Chief."
         ),
-        version="1.4.0",
+        version="1.5.0",
         lifespan=lifespan,
     )
 
@@ -258,7 +287,7 @@ def create_app() -> FastAPI:
         return HealthResponse(
             status="ok",
             engine="FlowChartCharterSystem",
-            version="1.4.0",
+            version="1.5.0",
             uptime_s=round(st.uptime_s, 3),
             days_ready=st.system.analytics.days_ready(),
             roster_size=len(st.system.roster),
@@ -281,6 +310,9 @@ def create_app() -> FastAPI:
                 "POST /system/execute-compiled",
                 "GET /system/playbook",
                 "GET /health",
+                "GET /metrics",
+                "GET /library",
+                "GET /ui/",
             ],
         }
 
@@ -313,6 +345,16 @@ def create_app() -> FastAPI:
             ) from exc
 
         elapsed = (time.perf_counter() - t0) * 1000.0
+        hub = get_metrics_hub()
+        hub.sync_from_system(st.system)
+        hub.observe_workload(
+            quality=float(result.get("quality", 0.0)),
+            trust=bool(result.get("trust", False)),
+            token_delta=int(result.get("token_spend", 0) or 0),
+            playbook_id=str(getattr(st.system, "active_playbook_id", None) or "default_charter"),
+            latency_s=elapsed / 1000.0,
+            endpoint="workload_submit",
+        )
         risks = [
             float(a.termination_risk_index)
             for a in st.system.roster
@@ -370,7 +412,7 @@ def create_app() -> FastAPI:
             muscle_memory_records=len(system.muscle_db.storage),
             living_playbook_records=len(system.playbook.records),
             analytics=system.analytics.export(),
-            engine_version="1.4.0",
+            engine_version="1.5.0",
         )
 
     @app.post(
@@ -526,6 +568,56 @@ def create_app() -> FastAPI:
             "requests": st.request_count,
             "uptime_s": round(st.uptime_s, 3),
         }
+
+    @app.get("/metrics", tags=["ops"])
+    async def prometheus_metrics() -> Response:
+        """Prometheus scrape endpoint — CPU-only, non-blocking."""
+        st = get_state()
+        hub = get_metrics_hub()
+        # snapshot gauges (no I/O, no LLM)
+        hub.sync_from_system(st.system)
+        return Response(content=hub.export(), media_type=hub.content_type)
+
+    @app.get("/library", tags=["library"])
+    async def list_library() -> Dict[str, Any]:
+        lib = _library_dir()
+        files = sorted(lib.glob("*.yaml")) + sorted(lib.glob("*.yml"))
+        return {
+            "path": str(lib),
+            "playbooks": [f.name for f in files if f.is_file()],
+        }
+
+    @app.get("/library/{name}", tags=["library"])
+    async def get_library_playbook(name: str) -> FileResponse:
+        """Serve a production Charterfile from the enterprise library."""
+        if "/" in name or ".." in name or not name.endswith((".yaml", ".yml")):
+            raise HTTPException(status_code=400, detail="invalid playbook name")
+        path = _library_dir() / name
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="playbook not found")
+        return FileResponse(
+            path,
+            media_type="application/yaml",
+            filename=name,
+        )
+
+    # Dashboard static (html=True) under /ui — API routes registered first
+    dash = _dashboard_dir()
+    if dash.is_dir():
+        index = dash / "index.html"
+
+        @app.get("/sandbox", include_in_schema=False)
+        @app.get("/app", include_in_schema=False)
+        async def sandbox_index():
+            if index.is_file():
+                return FileResponse(index)
+            raise HTTPException(status_code=404, detail="dashboard missing")
+
+        app.mount(
+            "/ui",
+            StaticFiles(directory=str(dash), html=True),
+            name="dashboard",
+        )
 
     return app
 

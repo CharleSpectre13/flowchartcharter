@@ -1,0 +1,72 @@
+# Enterprise Playbook Library — Legacy → Modern React Migration
+# Production Charterfile for multi-step stack modernization under CFO ceiling
+playbook_name: "Legacy to React Migration"
+version: "1.0.0"
+global_cfo_ceiling: 12000
+
+roster_requisition:
+  - role: "Legacy_Archaeologist"
+    capabilities: ["python_ast", "js_parse", "dependency_graph"]
+  - role: "Component_Architect"
+    capabilities: ["react", "typescript", "design_system"]
+  - role: "Test_Guardian"
+    capabilities: ["jest", "playwright", "snapshot_testing"]
+  - role: "Perf_Coach"
+    capabilities: ["bundle_analysis", "web_vitals", "code_splitting"]
+
+flow_units:
+  - id: "U1_Map_Legacy_Tree"
+    description: "Parse legacy UI tree; inventory routes, state stores, dead code."
+    assigned_role: "Legacy_Archaeologist"
+    expected_tokens: 1500
+    expected_latency_ms: 700.0
+    schema:
+      routes: "list[string]"
+      components: "list[string]"
+      dead_exports: "list[string]"
+      state_stores: "list[string]"
+      complexity_score: "float"
+
+  - id: "U2_Design_Target_Architecture"
+    description: "Define React/TS target map: pages, hooks, shared UI kit."
+    assigned_role: "Component_Architect"
+    expected_tokens: 1800
+    expected_latency_ms: 800.0
+    schema:
+      page_map: "list[string]"
+      shared_components: "list[string]"
+      hook_contracts: "list[string]"
+      design_tokens: "string"
+
+  - id: "U3_Migrate_Critical_Path"
+    description: "Port highest-traffic legacy screens to React with typed props."
+    assigned_role: "Component_Architect"
+    expected_tokens: 2500
+    expected_latency_ms: 1200.0
+    schema:
+      migrated_files: "list[string]"
+      remaining_legacy_pct: "float"
+      typescript_strict: "bool"
+      prop_contracts: "string"
+
+  - id: "U4_Regression_Harness"
+    description: "Generate unit + e2e coverage for migrated routes."
+    assigned_role: "Test_Guardian"
+    expected_tokens: 1400
+    expected_latency_ms: 650.0
+    schema:
+      unit_tests: "int"
+      e2e_tests: "int"
+      coverage_pct: "float"
+      failing_tests: "list[string]"
+
+  - id: "U5_Bundle_Budget"
+    description: "Enforce bundle size + Web Vitals budget before hand-off."
+    assigned_role: "Perf_Coach"
+    expected_tokens: 900
+    expected_latency_ms: 400.0
+    schema:
+      bundle_kb: "float"
+      lcp_ms: "float"
+      budget_pass: "bool"
+      split_points: "list[string]"

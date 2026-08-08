@@ -55,6 +55,8 @@ RUN pip install --no-cache-dir /wheels/* \
     && rm -rf /wheels
 
 COPY examples/charterfiles /app/charterfiles
+COPY library /app/library
+COPY dashboard /app/dashboard
 COPY scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh && chown fcc:fcc /app/docker-entrypoint.sh
 

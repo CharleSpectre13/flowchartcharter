@@ -332,7 +332,7 @@ def cmd_monitor(
     if mode == "local":
         console.print(
             "[yellow]No live server — monitor will show local engine snapshot.[/]\n"
-            f"Start API with [cyan]python -m flowchartcharter[/] then re-run."
+            "Start API with [cyan]python -m flowchartcharter[/] then re-run."
         )
 
     def fetch_frame() -> Dict[str, Any]:

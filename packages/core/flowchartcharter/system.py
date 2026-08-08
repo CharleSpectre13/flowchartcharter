@@ -4,6 +4,7 @@ import random
 from typing import Any, Dict, List, Optional, Sequence
 
 from .agents import Agent, AgentStatus, BossAgent
+from .analytics import AnalyticsChief
 from .blackboard import Blackboard, TaskRequest
 from .charter import Charter, FlowUnit
 from .elastic import ElasticRequisitionBoard
@@ -69,6 +70,7 @@ class FlowChartCharterSystem:
         )
         seed_living_playbook(self.playbook)
         self.elastic = ElasticRequisitionBoard()
+        self.analytics = AnalyticsChief()
         self.roster: List[Agent] = [
             Agent(
                 "Worker-1",
@@ -667,6 +669,19 @@ class FlowChartCharterSystem:
                 "fear_survival|elastic_phantom"
             ),
         }
+        # Analytics Chief — immutable cycle handoff (async ledger)
+        self.analytics.ingest_cycle(
+            agents=self.roster,
+            workload=workload_name,
+            path_trace=path_trace,
+            quality=quality,
+            flow_path=flow_path_used,
+        )
+        snap["analytics"] = {
+            "days_ready": self.analytics.days_ready(),
+            "day_counter": self.analytics.day_counter,
+            "workweek_complete": self.analytics.workweek_complete(),
+        }
         self.checkpointer.append(snap)
         self.blackboard.completed_jobs.append(workload_name)
         if workload_name in self.blackboard.active_jobs:
@@ -703,12 +718,20 @@ class FlowChartCharterSystem:
                 if s.get("trust")
             ],
         }
+        # Close analytics day (each downtime_sync ≈ end of enterprise day)
+        self.analytics.close_day()
+        dossier = self.analytics.execute_end_of_week_audit(
+            muscle_db=self.muscle_db,
+            living_playbook=self.playbook,
+            force=self.analytics.workweek_complete(),
+        )
         mm_count = len(self.muscle_db.storage)
         outcomes = self.boss.monday_morning_sync(
             self.roster,
             rng=self.rng,
             muscle_memory_records=mm_count,
             lean_rehire=True,
+            dossier=dossier,
         )
         phantom_outcomes = self.elastic.resolve_phantoms(self.roster)
         skill_result = self.skills.TriggerMondayMorningSync(
@@ -769,6 +792,9 @@ class FlowChartCharterSystem:
             "muscle_memory": muscle_snapshot,
             "muscle_db": self.muscle_db.export_dict(),
             "living_playbook": self.playbook.export(),
+            "dossier": dossier.to_dict() if dossier else None,
+            "analytics": self.analytics.export(),
+            "dossier_driven": dossier is not None,
             "ascension": self.playbook.horizon_reached,
             "quantum_lifetime": self.router.summary(),
             "skill_sync": skill_result,
@@ -789,3 +815,35 @@ class FlowChartCharterSystem:
 
     def skill_catalog(self) -> List[Dict[str, Any]]:
         return self.skills.tool_schemas()
+
+    def advance_analytics_day(self) -> int:
+        """Seal one analytics day without full talent sync."""
+        return self.analytics.close_day()
+
+    def run_end_of_week_protocol(self, *, force: bool = False) -> Dict[str, Any]:
+        """Analytics Chief EOW audit + GM dossier execution (Monday Sync)."""
+        if force and self.analytics.days_ready() < self.analytics.workweek_days:
+            # pad empty days for protocol demos
+            while self.analytics.days_ready() < self.analytics.workweek_days:
+                self.analytics.close_day()
+        dossier = self.analytics.execute_end_of_week_audit(
+            muscle_db=self.muscle_db,
+            living_playbook=self.playbook,
+            force=force or self.analytics.workweek_complete(),
+        )
+        mm_count = len(self.muscle_db.storage)
+        outcomes = self.boss.monday_morning_sync(
+            self.roster,
+            muscle_memory_records=mm_count,
+            lean_rehire=True,
+            dossier=dossier,
+        )
+        phantom_outcomes = self.elastic.resolve_phantoms(self.roster)
+        return {
+            "dossier": dossier.to_dict() if dossier else None,
+            "outcomes": outcomes,
+            "phantom_outcomes": phantom_outcomes,
+            "analytics": self.analytics.export(),
+            "lean_rehire": self.boss.rehire_export(),
+            "dossier_driven": dossier is not None,
+        }

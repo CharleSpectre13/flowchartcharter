@@ -115,6 +115,14 @@ from .living_playbook import (
     objective_signature_from_payload,
     capability_map_from_path,
 )
+from .analytics import (
+    AnalyticsChief,
+    RosterRecommendationDossier,
+    DailyTelemetrySnapshot,
+    AgentTrend,
+    CheatCodeExtraction,
+    WORKWEEK_DAYS,
+)
 
 __all__ = [
     "ExecutionMetrics",
@@ -212,5 +220,11 @@ __all__ = [
     "seed_living_playbook",
     "objective_signature_from_payload",
     "capability_map_from_path",
+    "AnalyticsChief",
+    "RosterRecommendationDossier",
+    "DailyTelemetrySnapshot",
+    "AgentTrend",
+    "CheatCodeExtraction",
+    "WORKWEEK_DAYS",
 ]
-__version__ = "1.0.0"
+__version__ = "1.1.0"

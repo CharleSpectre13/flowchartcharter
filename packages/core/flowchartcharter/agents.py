@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import uuid
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from .fitness import INDUSTRY_BENCHMARK, fitness
 from .metrics import ExecutionMetrics
@@ -21,6 +21,9 @@ from .survival import (
     should_fire_from_ledger,
     status_from_risk,
 )
+
+if TYPE_CHECKING:
+    from .analytics import RosterRecommendationDossier
 
 PATH_EXPECTED = {
     "path_A": {"tokens": 210, "time": 1.2},
@@ -228,9 +231,7 @@ class Agent:
         return score
 
     def survival_snapshot(self) -> Dict[str, Any]:
-        fit = (
-            round(self.calculate_fitness(), 4) if self.history else 0.0
-        )
+        fit = round(self.calculate_fitness(), 4) if self.history else 0.0
         return {
             "agent": self.name,
             "id": self.id,
@@ -247,7 +248,7 @@ class Agent:
 
 
 class BossAgent(Agent):
-    """General Manager — pruning, lean re-hire, elastic requisition hooks."""
+    """General Manager — executes Board dossier; day-to-day ops only."""
 
     def __init__(self, name: str):
         super().__init__(name, "General Manager (Boss)")
@@ -260,6 +261,7 @@ class BossAgent(Agent):
         self.survival_status = SurvivalStatus.ACTIVE
         self.termination_risk_index = 0.0
         self.is_phantom = False
+        self.last_dossier_id: Optional[str] = None
 
     def acknowledge_directive(self) -> str:
         self.acknowledged = True
@@ -273,7 +275,136 @@ class BossAgent(Agent):
         rng: Optional[random.Random] = None,
         muscle_memory_records: int = 0,
         lean_rehire: bool = True,
+        dossier: Optional["RosterRecommendationDossier"] = None,
     ) -> Dict[str, str]:
+        """ST-07 — prefer Analytics Chief 5-day dossier over local guesses.
+
+        When ``dossier`` is provided, the GM **executes** Board recommendations.
+        Fallback (no dossier): legacy fitness/ledger pruning.
+        """
+        if dossier is not None:
+            return self._execute_dossier(
+                team,
+                dossier,
+                muscle_memory_records=muscle_memory_records,
+                lean_rehire=lean_rehire,
+            )
+        return self._legacy_fitness_sync(
+            team,
+            benchmark=benchmark,
+            rng=rng,
+            muscle_memory_records=muscle_memory_records,
+            lean_rehire=lean_rehire,
+        )
+
+    def _execute_dossier(
+        self,
+        team: List[Agent],
+        dossier: "RosterRecommendationDossier",
+        *,
+        muscle_memory_records: int,
+        lean_rehire: bool,
+    ) -> Dict[str, str]:
+        """Execute RosterRecommendationDossier — zero local guessing."""
+        outcomes: Dict[str, str] = {}
+        self.rehire_log = []
+        self.last_dossier_id = dossier.dossier_id
+        action_map = dossier.action_map()
+        by_name = {a.name: a for a in team if not isinstance(a, BossAgent)}
+
+        self.playbook.append(
+            f"Ingest dossier {dossier.dossier_id} "
+            f"(week={dossier.week_index}, days={dossier.days_covered})"
+        )
+
+        for name, action in action_map.items():
+            agent = by_name.get(name)
+            if agent is None:
+                continue
+            if not getattr(agent, "talent_eligible", True):
+                continue
+
+            if action == "TERMINATE":
+                agent.status = AgentStatus.FIRED
+                agent.survival_status = SurvivalStatus.TERMINATED
+                agent.corporate_rank = 0.0
+                agent.refresh_survival_prompt()
+                outcomes[name] = "FIRED"
+                self.playbook.append(
+                    f"Board TERMINATE {name} via {dossier.dossier_id}"
+                )
+                if lean_rehire:
+                    surviving = sum(
+                        1
+                        for a in team
+                        if not isinstance(a, BossAgent)
+                        and a.status
+                        in (
+                            AgentStatus.ACTIVE,
+                            AgentStatus.PROMOTED,
+                            AgentStatus.PHANTOM,
+                        )
+                        and getattr(a, "talent_eligible", True)
+                    )
+                    decision = lean_rehire_check(
+                        agent_name=name,
+                        surviving_ops=surviving,
+                        muscle_memory_records=muscle_memory_records,
+                    )
+                    self.rehire_log.append(decision)
+            elif action == "PROMOTE":
+                agent.status = AgentStatus.PROMOTED
+                agent.corporate_rank = min(10.0, agent.corporate_rank + 1.0)
+                agent.termination_risk_index = max(
+                    0.0, agent.termination_risk_index - 0.08
+                )
+                if getattr(agent, "is_phantom", False):
+                    agent.is_phantom = False
+                agent.refresh_survival_prompt()
+                outcomes[name] = "PROMOTED"
+                self.playbook.append(
+                    f"Board PROMOTE {name} via {dossier.dossier_id}"
+                )
+            elif action == "DEMOTE":
+                agent.status = AgentStatus.DEMOTED
+                agent.corporate_rank = max(0.5, agent.corporate_rank - 0.5)
+                agent.refresh_survival_prompt()
+                outcomes[name] = "DEMOTED"
+                self.playbook.append(
+                    f"Board DEMOTE {name} via {dossier.dossier_id}"
+                )
+            else:
+                agent.status = AgentStatus.ACTIVE
+                agent.refresh_survival_prompt()
+                outcomes[name] = "RETAINED"
+                self.playbook.append(
+                    f"Board RETAIN {name} via {dossier.dossier_id}"
+                )
+
+        # Agents not in dossier but on team: retain if active history
+        for agent in team:
+            if isinstance(agent, BossAgent):
+                continue
+            if agent.name in outcomes:
+                continue
+            if not getattr(agent, "talent_eligible", True):
+                continue
+            if agent.status == AgentStatus.FIRED:
+                continue
+            outcomes[agent.name] = "RETAINED"
+
+        return outcomes
+
+    def _legacy_fitness_sync(
+        self,
+        team: List[Agent],
+        *,
+        benchmark: float,
+        rng: Optional[random.Random],
+        muscle_memory_records: int,
+        lean_rehire: bool,
+    ) -> Dict[str, str]:
+        """Fallback when no Analytics dossier is available."""
         r = rng or random
         outcomes: Dict[str, str] = {}
         self.rehire_log = []
@@ -328,10 +459,6 @@ class BossAgent(Agent):
                         muscle_memory_records=muscle_memory_records,
                     )
                     self.rehire_log.append(decision)
-                    self.playbook.append(
-                        f"Lean re-hire {agent.name}: backfill="
-                        f"{decision.backfill}"
-                    )
                 continue
 
             if getattr(agent, "is_phantom", False) and f >= benchmark * 1.15:
@@ -342,9 +469,6 @@ class BossAgent(Agent):
                 )
                 agent.refresh_survival_prompt()
                 outcomes[agent.name] = "PHANTOM_HIRED"
-                self.playbook.append(
-                    f"Convert phantom {agent.name}: F={f:.3f}"
-                )
                 continue
 
             if f >= benchmark * 1.2 and risk < 0.35:
@@ -355,15 +479,11 @@ class BossAgent(Agent):
                 )
                 agent.refresh_survival_prompt()
                 outcomes[agent.name] = "PROMOTED"
-                self.playbook.append(f"Promote {agent.name}: fitness={f:.3f}")
             elif f < benchmark * 0.75 or risk >= 0.55:
                 agent.status = AgentStatus.DEMOTED
                 agent.corporate_rank = max(0.5, agent.corporate_rank - 0.5)
                 agent.refresh_survival_prompt()
                 outcomes[agent.name] = "DEMOTED"
-                self.playbook.append(
-                    f"Demote {agent.name}: F={f:.3f} risk={risk:.3f}"
-                )
             else:
                 agent.status = AgentStatus.ACTIVE
                 for p in list(agent.muscle_memory_weights.keys()):

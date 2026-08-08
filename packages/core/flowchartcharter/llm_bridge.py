@@ -4,6 +4,7 @@ When FCC_LLM_PROVIDER is set (openai|xai|gemini|mock), workers format their
 Fear/TPC system prompt and make a live outbound call. Pydantic validates the
 return schema. Default remains simulation for offline demos.
 """
+
 from __future__ import annotations
 
 import json
@@ -45,9 +46,7 @@ class LLMBridgeConfig(BaseModel):
     @classmethod
     def from_env(cls) -> "LLMBridgeConfig":
         provider = os.environ.get("FCC_LLM_PROVIDER", "mock").lower()
-        key = os.environ.get("FCC_LLM_API_KEY") or os.environ.get(
-            "OPENAI_API_KEY", ""
-        )
+        key = os.environ.get("FCC_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY", "")
         base = os.environ.get("FCC_LLM_BASE_URL", "")
         if not base:
             if provider == "openai":
@@ -134,18 +133,8 @@ class LLMBridge:
                 f"{cfg.base_url.rstrip('/')}/models/{cfg.model}:generateContent"
                 f"?key={cfg.api_key}"
             )
-            body = {
-                "contents": [
-                    {
-                        "parts": [
-                            {"text": f"SYSTEM:\n{system}\n\nUSER:\n{user}"}
-                        ]
-                    }
-                ]
-            }
-            raw = self._http_json(
-                url, body, {"Content-Type": "application/json"}
-            )
+            body = {"contents": [{"parts": [{"text": f"SYSTEM:\n{system}\n\nUSER:\n{user}"}]}]}
+            raw = self._http_json(url, body, {"Content-Type": "application/json"})
             try:
                 data = json.loads(raw)
                 return data["candidates"][0]["content"]["parts"][0]["text"]
@@ -153,22 +142,14 @@ class LLMBridge:
                 return raw
         return self._mock(path="path_A", risk=0.0).model_dump_json()
 
-    def _http_json(
-        self, url: str, body: Dict[str, Any], headers: Dict[str, str]
-    ) -> str:
+    def _http_json(self, url: str, body: Dict[str, Any], headers: Dict[str, str]) -> str:
         data = json.dumps(body).encode("utf-8")
-        req = urllib.request.Request(
-            url, data=data, headers=headers, method="POST"
-        )
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
         try:
-            with urllib.request.urlopen(
-                req, timeout=self.config.timeout_s
-            ) as resp:
+            with urllib.request.urlopen(req, timeout=self.config.timeout_s) as resp:
                 payload = resp.read().decode("utf-8")
         except urllib.error.HTTPError as exc:
-            raise RuntimeError(
-                f"LLM HTTP {exc.code}: {exc.read()[:200]}"
-            ) from exc
+            raise RuntimeError(f"LLM HTTP {exc.code}: {exc.read()[:200]}") from exc
         except urllib.error.URLError as exc:
             raise RuntimeError(f"LLM network error: {exc}") from exc
 
@@ -180,15 +161,11 @@ class LLMBridge:
             pass
         return payload
 
-    def _parse_and_validate(
-        self, raw: str, *, fallback_path: str
-    ) -> LLMNodeOutput:
+    def _parse_and_validate(self, raw: str, *, fallback_path: str) -> LLMNodeOutput:
         text = raw.strip()
         if text.startswith("```"):
             lines = text.split("\n")
-            text = "\n".join(
-                ln for ln in lines if not ln.strip().startswith("```")
-            )
+            text = "\n".join(ln for ln in lines if not ln.strip().startswith("```"))
         try:
             data = json.loads(text)
         except json.JSONDecodeError:
@@ -203,9 +180,7 @@ class LLMBridge:
         try:
             return LLMNodeOutput.model_validate(data)
         except ValidationError as exc:
-            raise RuntimeError(
-                f"LLM schema validation failed: {exc}"
-            ) from exc
+            raise RuntimeError(f"LLM schema validation failed: {exc}") from exc
 
 
 def format_worker_live_prompt(

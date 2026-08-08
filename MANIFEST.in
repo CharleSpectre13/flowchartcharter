@@ -1,0 +1,8 @@
+include LICENSE
+include README.md
+include requirements.txt
+include pyproject.toml
+recursive-include packages/core/flowchartcharter *.py
+recursive-include packages/core/flowchartcharter py.typed
+recursive-include examples/charterfiles *.yaml
+global-exclude __pycache__ *.py[cod] .DS_Store

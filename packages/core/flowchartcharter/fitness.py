@@ -4,6 +4,7 @@ Critical fixes:
   V1 Token Penalty Trap → only penalize bloat (actual − expected)
   V2 Speed divide-by-zero → β · exp(−actual/expected), capped contribution
 """
+
 from __future__ import annotations
 
 import math
@@ -55,9 +56,7 @@ def token_bloat_penalty(
 
     Token_Penalty = γ · max(0, actual − expected) / norm
     """
-    expected = (
-        expected_tokens if expected_tokens > 0 else float(actual_tokens)
-    )
+    expected = expected_tokens if expected_tokens > 0 else float(actual_tokens)
     bloat = max(0.0, float(actual_tokens) - float(expected))
     return gamma * (bloat / max(norm, 1e-9))
 
@@ -87,18 +86,17 @@ def fitness(
     avg_t = sum(m.execution_time for m in history) / n
     avg_c = sum(m.token_cost for m in history) / n
     avg_s = sum(m.synergy_score for m in history) / n
-    avg_exp_t = sum(
-        (m.expected_time if m.expected_time > 0 else DEFAULT_EXPECTED_LATENCY)
-        for m in history
-    ) / n
-    avg_exp_c = sum(
-        (
-            m.expected_token_cost
-            if m.expected_token_cost > 0
-            else DEFAULT_EXPECTED_TOKENS
+    avg_exp_t = (
+        sum((m.expected_time if m.expected_time > 0 else DEFAULT_EXPECTED_LATENCY) for m in history)
+        / n
+    )
+    avg_exp_c = (
+        sum(
+            (m.expected_token_cost if m.expected_token_cost > 0 else DEFAULT_EXPECTED_TOKENS)
+            for m in history
         )
-        for m in history
-    ) / n
+        / n
+    )
 
     q_term = alpha * avg_q
     speed_term = speed_score(avg_t, avg_exp_t, beta=beta)
@@ -129,18 +127,17 @@ def fitness_components(
     avg_t = sum(m.execution_time for m in history) / n
     avg_c = sum(m.token_cost for m in history) / n
     avg_s = sum(m.synergy_score for m in history) / n
-    avg_exp_t = sum(
-        (m.expected_time if m.expected_time > 0 else DEFAULT_EXPECTED_LATENCY)
-        for m in history
-    ) / n
-    avg_exp_c = sum(
-        (
-            m.expected_token_cost
-            if m.expected_token_cost > 0
-            else DEFAULT_EXPECTED_TOKENS
+    avg_exp_t = (
+        sum((m.expected_time if m.expected_time > 0 else DEFAULT_EXPECTED_LATENCY) for m in history)
+        / n
+    )
+    avg_exp_c = (
+        sum(
+            (m.expected_token_cost if m.expected_token_cost > 0 else DEFAULT_EXPECTED_TOKENS)
+            for m in history
         )
-        for m in history
-    ) / n
+        / n
+    )
     return {
         "quality": alpha * avg_q,
         "speed": speed_score(avg_t, avg_exp_t, beta=beta),

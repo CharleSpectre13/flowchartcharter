@@ -4,6 +4,7 @@ When lean re-hire has shrunk the roster and a novel high-entropy workload
 arrives requiring a missing capability, the GM spins a temporary Phantom
 Node. Success → promote to ACTIVE full-time. Failure → terminate.
 """
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
@@ -11,7 +12,6 @@ from typing import Any, Dict, List, Optional, Set
 
 from .agents import Agent, AgentStatus, BossAgent
 from .survival import SurvivalStatus, generation_params_for_risk
-
 
 # Capability keywords inferred from workload text
 CAPABILITY_KEYWORDS: Dict[str, List[str]] = {
@@ -64,9 +64,7 @@ class ElasticRequisitionBoard:
                 continue
             if isinstance(agent, BossAgent):
                 continue
-            caps = getattr(agent, "capabilities", None) or _infer_caps_from_role(
-                agent.role
-            )
+            caps = getattr(agent, "capabilities", None) or _infer_caps_from_role(agent.role)
             self.known_capabilities.update(caps)
 
     def required_capability(self, workload: str) -> Optional[str]:
@@ -76,10 +74,7 @@ class ElasticRequisitionBoard:
                 if cap not in self.known_capabilities:
                     return cap
         # generic novel high-entropy marker
-        if any(
-            k in lower
-            for k in ("novel", "unprecedented", "unknown", "sql_optimization")
-        ):
+        if any(k in lower for k in ("novel", "unprecedented", "unknown", "sql_optimization")):
             return "sql_optimization"
         return None
 
@@ -96,9 +91,7 @@ class ElasticRequisitionBoard:
         if cap is None or cap in self.known_capabilities:
             return None
 
-        self.log.append(
-            f"Elastic requisition: missing capability '{cap}' for '{workload}'"
-        )
+        self.log.append(f"Elastic requisition: missing capability '{cap}' for '{workload}'")
         phantom = Agent(
             f"Phantom-{cap[:12]}",
             f"Ad-Hoc {cap} Specialist",
@@ -122,9 +115,7 @@ class ElasticRequisitionBoard:
             reason="elastic_requisition",
         )
         self.phantoms.append(rec)
-        self.log.append(
-            f"Phantom Node {phantom.name} ({phantom.id}) spun for {cap}"
-        )
+        self.log.append(f"Phantom Node {phantom.name} ({phantom.id}) spun for {cap}")
         return phantom
 
     def resolve_phantoms(
@@ -145,9 +136,7 @@ class ElasticRequisitionBoard:
             if f >= fitness_hire:
                 agent.is_phantom = False  # type: ignore[attr-defined]
                 agent.status = AgentStatus.PROMOTED
-                agent.termination_risk_index = max(
-                    0.0, agent.termination_risk_index - 0.3
-                )
+                agent.termination_risk_index = max(0.0, agent.termination_risk_index - 0.3)
                 agent.refresh_survival_prompt()
                 outcomes.append(
                     {
@@ -156,9 +145,7 @@ class ElasticRequisitionBoard:
                         "fitness": round(f, 4),
                     }
                 )
-                self.log.append(
-                    f"Phantom {agent.name} converted to full-time (F={f:.3f})"
-                )
+                self.log.append(f"Phantom {agent.name} converted to full-time (F={f:.3f})")
                 for p in self.phantoms:
                     if p.node_id == agent.id:
                         p.converted = True
@@ -173,9 +160,7 @@ class ElasticRequisitionBoard:
                         "fitness": round(f, 4),
                     }
                 )
-                self.log.append(
-                    f"Phantom {agent.name} terminated (F={f:.3f})"
-                )
+                self.log.append(f"Phantom {agent.name} terminated (F={f:.3f})")
                 for p in self.phantoms:
                     if p.node_id == agent.id:
                         p.terminated = True

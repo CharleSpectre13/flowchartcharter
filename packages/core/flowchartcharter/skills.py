@@ -6,6 +6,7 @@
 4. TriggerMondayMorningSync
 5. AdjustCorporateRoster
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -131,13 +132,9 @@ class AgentSkillRuntime:
                 if best and best.get("successful_flow_path")
                 else None
             ),
-            "recommended_flow_path": (
-                best["successful_flow_path"] if best else None
-            ),
+            "recommended_flow_path": (best["successful_flow_path"] if best else None),
             "prompt_tweak": best["prompt_tweak"] if best else None,
-            "entanglement_score": (
-                best["entanglement_score"] if best else None
-            ),
+            "entanglement_score": (best["entanglement_score"] if best else None),
             "memory_id": best["memory_id"] if best else None,
         }
 
@@ -154,9 +151,7 @@ class AgentSkillRuntime:
         for key in expected_schema:
             if key not in agent_output_json:
                 errors.append(f"missing:{key}")
-            elif type(expected_schema[key]) is not type(
-                agent_output_json[key]
-            ):
+            elif type(expected_schema[key]) is not type(agent_output_json[key]):
                 if not (
                     isinstance(expected_schema[key], (int, float))
                     and isinstance(agent_output_json[key], (int, float))
@@ -173,9 +168,7 @@ class AgentSkillRuntime:
             "D": d,
             "schema_errors": errors,
             "route_back": not (passed and not errors),
-            "translation_tokens_needed": handoff[
-                "translation_tokens_needed"
-            ],
+            "translation_tokens_needed": handoff["translation_tokens_needed"],
             "formula": handoff["formula"],
         }
 
@@ -236,11 +229,7 @@ class AgentSkillRuntime:
         if gm is not None and team:
             outcomes = gm.monday_morning_sync(team)
 
-        path_stats = (
-            telemetry_data.get("path_stats")
-            or telemetry_data.get("paths")
-            or {}
-        )
+        path_stats = telemetry_data.get("path_stats") or telemetry_data.get("paths") or {}
         for agent in team:
             if not getattr(agent, "talent_eligible", True):
                 continue
@@ -248,31 +237,19 @@ class AgentSkillRuntime:
             for path, stats in path_stats.items():
                 if not isinstance(stats, dict):
                     continue
-                success_rate = float(
-                    stats.get("success_rate", stats.get("quality", 0.5))
-                )
+                success_rate = float(stats.get("success_rate", stats.get("quality", 0.5)))
                 prev = mm.get(path, 1.0)
-                mm[path] = max(
-                    0.05, min(8.0, prev * (0.7 + 0.6 * success_rate))
-                )
+                mm[path] = max(0.05, min(8.0, prev * (0.7 + 0.6 * success_rate)))
             agent.muscle_memory_weights = mm
             reweights[agent.name] = dict(mm)
 
         for run in telemetry_data.get("successful_runs", []):
-            vec = (
-                run.get("state_vector")
-                or run.get("vector")
-                or [0.5, 0.5, 0.5, 0.1]
-            )
+            vec = run.get("state_vector") or run.get("vector") or [0.5, 0.5, 0.5, 0.1]
             path = run.get("path") or run.get("flow_path") or "path_A"
             flow_path = path if isinstance(path, list) else [str(path)]
             self.db.commit_memory(
                 ExecutionMemoryRecord(
-                    memory_id=str(
-                        run.get(
-                            "memory_id", f"RUN-{len(self.db.storage)}"
-                        )
-                    ),
+                    memory_id=str(run.get("memory_id", f"RUN-{len(self.db.storage)}")),
                     job_type=str(
                         run.get(
                             "charter_id",
@@ -336,9 +313,7 @@ class AgentSkillRuntime:
             target.corporate_rank = 0.0
 
         if self.boss is not None:
-            self.boss.playbook.append(
-                f"{act.value} {target.name} via AdjustCorporateRoster"
-            )
+            self.boss.playbook.append(f"{act.value} {target.name} via AdjustCorporateRoster")
 
         return {
             "skill": "AdjustCorporateRoster",
@@ -353,9 +328,7 @@ class AgentSkillRuntime:
     def tool_schemas(self) -> List[Dict[str, Any]]:
         return list(AGENT_SKILL_SCHEMAS)
 
-    def dispatch(
-        self, name: str, arguments: Mapping[str, Any]
-    ) -> Dict[str, Any]:
+    def dispatch(self, name: str, arguments: Mapping[str, Any]) -> Dict[str, Any]:
         """Generic function-call dispatcher."""
         fn = getattr(self, name, None)
         if fn is None or not callable(fn):

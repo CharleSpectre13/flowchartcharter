@@ -1,7 +1,8 @@
 """CEO / CFO / Board — executive layer; CFO applies budget matrix before collapse."""
+
 from __future__ import annotations
 from typing import Dict, List, Mapping, Optional, Tuple
-from .agents import Agent, BossAgent
+from .agents import Agent
 from .quantum import DEFAULT_PATH_COSTS, PATH_LITE, apply_cfo_budget_matrix
 from .vectors import (
     StrategyVector,
@@ -199,7 +200,9 @@ class ExecutiveBoard:
         quality: float,
     ) -> List:
         strategy = self.ceo.issue_strategy(charter_id)
-        budget = self.cfo.issue_budget(charter_id, token_spend=token_spend, token_budget=token_budget)
+        budget = self.cfo.issue_budget(
+            charter_id, token_spend=token_spend, token_budget=token_budget
+        )
         gov = self.board.review_hand_off(charter_id, trust=trust, quality=quality)
         return [strategy, budget, gov]
 

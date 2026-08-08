@@ -8,12 +8,12 @@ Components:
   3. Monday Pruning + Lean Re-hiring — FIRE without automatic backfill
   4. Dynamic prompt injection — live risk drives generation parameters
 """
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
-
 
 # ---------------------------------------------------------------------------
 # Thresholds (tunable, deterministic defaults)
@@ -96,9 +96,7 @@ class TelemetryLedger:
     @property
     def over_budget_count(self) -> int:
         return sum(
-            1
-            for e in self.entries
-            if e.token_ceiling > 0 and e.token_spend > e.token_ceiling
+            1 for e in self.entries if e.token_ceiling > 0 and e.token_spend > e.token_ceiling
         )
 
     def export(self) -> Dict[str, Any]:
@@ -131,11 +129,7 @@ def risk_from_ledger(
         risk += RISK_LATENCY_SPIKE * min(2.0, last.delta_t / 2.0)
     if last.structural_drift > 0.25:
         risk += RISK_DRIFT_SPIKE * last.structural_drift
-    if (
-        last.schema_divergence == 0
-        and last.structural_drift < 0.1
-        and last.quality >= 0.9
-    ):
+    if last.schema_divergence == 0 and last.structural_drift < 0.1 and last.quality >= 0.9:
         risk = max(0.0, risk - RISK_DECAY_ON_CLEAN)
     return max(0.0, min(1.0, risk))
 
@@ -183,9 +177,7 @@ def build_worker_system_prompt(
     flow_unit_schema: Optional[str] = None,
 ) -> str:
     """Dynamic worker system prompt with persistent survival telemetry."""
-    schema_block = flow_unit_schema or (
-        "{result: str, quality: float, path: str, tokens: int}"
-    )
+    schema_block = flow_unit_schema or ("{result: str, quality: float, path: str, tokens: int}")
     fear_block = ""
     if termination_risk_index >= 0.35:
         fear_block = f"""
@@ -268,8 +260,7 @@ def lean_rehire_check(
         fired=True,
         backfill=True,
         reason=(
-            "Backfill required: insufficient surviving ops or empty "
-            "Muscle-Memory coverage."
+            "Backfill required: insufficient surviving ops or empty " "Muscle-Memory coverage."
         ),
         surviving_ops=surviving_ops,
         muscle_memory_records=muscle_memory_records,

@@ -10,17 +10,17 @@ Enhancements (Advanced System Blueprint):
   B. Synergy Q_s = exp(−k·D) — see synergy.py
   C. CFO Token Economics Override — budget constraint matrix before measurement
 """
+
 from __future__ import annotations
 import math
 import random
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
-
 # Default playbook paths
-PATH_STANDARD = "path_A"       # standard execution
-PATH_CLEANSING = "path_B"      # data-cleansing (high H_ctx)
-PATH_LITE = "path_lite"        # CFO forced simplified / cheap
+PATH_STANDARD = "path_A"  # standard execution
+PATH_CLEANSING = "path_B"  # data-cleansing (high H_ctx)
+PATH_LITE = "path_lite"  # CFO forced simplified / cheap
 DEFAULT_PATHS = (PATH_STANDARD, PATH_CLEANSING, PATH_LITE)
 
 # Affinity of each path to high context entropy (0 = prefer clean, 1 = prefer messy)
@@ -40,6 +40,7 @@ DEFAULT_PATH_COSTS: Dict[str, float] = {
 
 # ── Data types ───────────────────────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class PathAmplitude:
     path: str
@@ -51,6 +52,7 @@ class PathAmplitude:
 @dataclass(frozen=True)
 class SuperpositionState:
     """|ψ⟩ = Σ cᵢ |FlowUnitᵢ⟩"""
+
     amplitudes: Tuple[PathAmplitude, ...]
     entropy: float
     context_entropy: float = 0.0
@@ -113,6 +115,7 @@ class MeasurementRecord:
 
 # ── Pure functions ───────────────────────────────────────────────────────────
 
+
 def shannon_entropy(probs: Sequence[float]) -> float:
     ent = 0.0
     for p in probs:
@@ -154,7 +157,11 @@ def contextual_entropy(
     noise = float(payload.get("noise", payload.get("uncertainty", 0.0)))
     missing = float(payload.get("missing_ratio", 0.0))
     variance = float(payload.get("variance", 0.0))
-    raw = 0.45 * max(0.0, min(1.0, noise)) + 0.35 * max(0.0, min(1.0, missing)) + 0.20 * max(0.0, min(1.0, variance))
+    raw = (
+        0.45 * max(0.0, min(1.0, noise))
+        + 0.35 * max(0.0, min(1.0, missing))
+        + 0.20 * max(0.0, min(1.0, variance))
+    )
     return max(0.0, min(1.0, raw))
 
 
@@ -290,7 +297,9 @@ def measure(
     if deterministic or temperature <= 0:
         chosen = state.dominant().path
     else:
-        logits = [math.log(max(a.probability, 1e-15)) / max(temperature, 1e-6) for a in state.amplitudes]
+        logits = [
+            math.log(max(a.probability, 1e-15)) / max(temperature, 1e-6) for a in state.amplitudes
+        ]
         m = max(logits)
         exps = [math.exp(x - m) for x in logits]
         z = sum(exps)
@@ -298,7 +307,9 @@ def measure(
         chosen = r.choices([a.path for a in state.amplitudes], weights=weights, k=1)[0]
 
     collapsed = SuperpositionState(
-        amplitudes=(PathAmplitude(path=chosen, amplitude=1.0, probability=1.0, success_weight=1.0),),
+        amplitudes=(
+            PathAmplitude(path=chosen, amplitude=1.0, probability=1.0, success_weight=1.0),
+        ),
         entropy=0.0,
         context_entropy=state.context_entropy,
         cfo_override=state.cfo_override,
@@ -352,6 +363,7 @@ def entanglement_score(
 
 
 # ── QuantumRouter ────────────────────────────────────────────────────────────
+
 
 class QuantumRouter:
     """Stateful tensor-based path router with H_ctx + CFO override."""
@@ -500,15 +512,20 @@ class QuantumRouter:
         if len(qualities) < 2:
             return float(qualities[0]) if qualities else 0.0
         scores = [
-            entanglement_score(qualities[i], qualities[i + 1])
-            for i in range(len(qualities) - 1)
+            entanglement_score(qualities[i], qualities[i + 1]) for i in range(len(qualities) - 1)
         ]
         return sum(scores) / len(scores)
 
     def summary(self) -> Dict[str, Any]:
         collapses = len(self.history)
         if not collapses:
-            return {"collapses": 0, "mean_pre_entropy": 0.0, "mean_h_ctx": 0.0, "paths": {}, "cfo_forced": 0}
+            return {
+                "collapses": 0,
+                "mean_pre_entropy": 0.0,
+                "mean_h_ctx": 0.0,
+                "paths": {},
+                "cfo_forced": 0,
+            }
         mean_ent = sum(r.pre.entropy for r in self.history) / collapses
         mean_h = sum(r.context_entropy for r in self.history) / collapses
         path_counts: Dict[str, int] = {}

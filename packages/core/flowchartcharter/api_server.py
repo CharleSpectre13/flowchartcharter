@@ -7,6 +7,7 @@ drive Monday Sync / Analytics over HTTP.
 Global application state keeps GM, Muscle-Memory VDB, Living Playbook,
 Analytics Chief, and PlaybookCompiler resident between requests.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -333,9 +334,7 @@ def create_app() -> FastAPI:
             analytics=result.get("analytics"),
             live_wire=bool(result.get("live_wire", True)),
             llm_provider=str(result.get("llm_provider") or "mock"),
-            entanglement_mean=(
-                round(sum(risks) / len(risks), 4) if risks else 0.0
-            ),
+            entanglement_mean=(round(sum(risks) / len(risks), 4) if risks else 0.0),
             elapsed_ms=round(elapsed, 2),
         )
 
@@ -353,8 +352,7 @@ def create_app() -> FastAPI:
             1
             for a in system.roster
             if not isinstance(a, BossAgent)
-            and a.status
-            in (AgentStatus.ACTIVE, AgentStatus.PROMOTED, AgentStatus.PHANTOM)
+            and a.status in (AgentStatus.ACTIVE, AgentStatus.PROMOTED, AgentStatus.PHANTOM)
             and system._is_ops(a)
         )
         return RosterStatusResponse(
@@ -389,9 +387,7 @@ def create_app() -> FastAPI:
             dossier_driven=bool(result.get("dossier_driven")),
             dossier=result.get("dossier"),
             lean_rehire=list(result.get("lean_rehire") or []),
-            active_ops_after_prune=int(
-                result.get("active_ops_after_prune") or 0
-            ),
+            active_ops_after_prune=int(result.get("active_ops_after_prune") or 0),
             ascension=bool(result.get("ascension")),
             analytics=result.get("analytics") or st.system.analytics.export(),
         )
@@ -404,9 +400,7 @@ def create_app() -> FastAPI:
     async def advance_analytics(
         run_eow_if_ready: bool = Query(
             True,
-            description=(
-                "If workweek complete, run end-of-week audit + dossier sync"
-            ),
+            description=("If workweek complete, run end-of-week audit + dossier sync"),
         ),
     ) -> AdvanceAnalyticsResponse:
         """Advance Analytics Chief by one day; optionally run 5-day audit."""
@@ -417,9 +411,7 @@ def create_app() -> FastAPI:
         dossier_driven = False
 
         if run_eow_if_ready and st.system.analytics.workweek_complete():
-            eow = await asyncio.to_thread(
-                st.system.run_end_of_week_protocol, force=False
-            )
+            eow = await asyncio.to_thread(st.system.run_end_of_week_protocol, force=False)
             dossier_data = eow.get("dossier")
             outcomes = eow.get("outcomes")
             dossier_driven = bool(eow.get("dossier_driven"))
@@ -444,9 +436,7 @@ def create_app() -> FastAPI:
     ) -> AdvanceAnalyticsResponse:
         """Explicit Analytics Chief end-of-week protocol."""
         st = get_state()
-        eow = await asyncio.to_thread(
-            st.system.run_end_of_week_protocol, force=force
-        )
+        eow = await asyncio.to_thread(st.system.run_end_of_week_protocol, force=force)
         return AdvanceAnalyticsResponse(
             day_closed=st.system.analytics.day_counter - 1,
             days_ready=st.system.analytics.days_ready(),

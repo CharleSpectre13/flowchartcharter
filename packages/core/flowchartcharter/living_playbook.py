@@ -8,6 +8,7 @@ Layers:
   3. Muscle-Memory Horizon — pattern interpolation + zero-shot FlowChart synthesis
   4. Ascension Protocol — nodes "become the coach" above critical mass
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -22,7 +23,6 @@ from .muscle_memory import (
     cosine_similarity,
     encode_state,
 )
-
 
 # ---------------------------------------------------------------------------
 # Ascended schema
@@ -113,16 +113,12 @@ class AscendedMemoryRecord:
         if not self.memory_id:
             self.memory_id = f"LPB-{uuid.uuid4().hex[:8].upper()}"
         self.state_vector = [float(x) for x in self.state_vector]
-        self.objective_signature = [
-            max(0.0, min(1.0, float(x))) for x in self.objective_signature
-        ]
+        self.objective_signature = [max(0.0, min(1.0, float(x))) for x in self.objective_signature]
         while len(self.objective_signature) < OBJECTIVE_DIMS:
             self.objective_signature.append(0.5)
         self.objective_signature = self.objective_signature[:OBJECTIVE_DIMS]
         self.successful_flow_path = [str(p) for p in self.successful_flow_path]
-        self.capability_map = {
-            str(k): float(v) for k, v in self.capability_map.items()
-        }
+        self.capability_map = {str(k): float(v) for k, v in self.capability_map.items()}
         self.evolution_iteration = max(1, int(self.evolution_iteration))
         if not 0.0 <= self.quality <= 1.0:
             raise ValueError("quality must be in [0, 1]")
@@ -130,11 +126,7 @@ class AscendedMemoryRecord:
     def ascended_vector(self) -> List[float]:
         """Flat vector for similarity: objective + KPIs + evolution scale."""
         evo = min(1.0, self.evolution_iteration / 20.0)
-        return (
-            list(self.objective_signature)
-            + self.kpis.as_vector()
-            + [evo]
-        )
+        return list(self.objective_signature) + self.kpis.as_vector() + [evo]
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -164,10 +156,7 @@ def objective_signature_from_payload(
 ) -> List[float]:
     """Derive 6-dim objective signature from workload text + features."""
     text = str(
-        payload.get("task")
-        or payload.get("job")
-        or payload.get("workload")
-        or payload
+        payload.get("task") or payload.get("job") or payload.get("workload") or payload
     ).lower()
     # domain buckets (hash-stable pseudo embedding of keywords)
     domains = {
@@ -276,9 +265,7 @@ class LivingPlaybook:
         promote_to_muscle: Optional[MuscleMemoryVectorDB] = None,
     ) -> None:
         """Store ascended trajectory; optionally mirror into classic MM VDB."""
-        record.evolution_iteration = max(
-            record.evolution_iteration, self.evolution_iteration
-        )
+        record.evolution_iteration = max(record.evolution_iteration, self.evolution_iteration)
         self.records.append(record)
         if promote_to_muscle is not None and record.quality >= 0.90:
             promote_to_muscle.commit_memory(record.to_execution_record())
@@ -523,26 +510,20 @@ class LivingPlaybook:
         blended_kpis = AbstractedKPIs(
             quality=w1 * primary.kpis.quality + w2 * secondary.kpis.quality,
             token_efficiency=(
-                w1 * primary.kpis.token_efficiency
-                + w2 * secondary.kpis.token_efficiency
+                w1 * primary.kpis.token_efficiency + w2 * secondary.kpis.token_efficiency
             ),
-            latency_ratio=(
-                w1 * primary.kpis.latency_ratio
-                + w2 * secondary.kpis.latency_ratio
-            ),
+            latency_ratio=(w1 * primary.kpis.latency_ratio + w2 * secondary.kpis.latency_ratio),
             schema_compliance=min(
                 primary.kpis.schema_compliance,
                 secondary.kpis.schema_compliance,
             ),
-            entanglement=(
-                w1 * primary.kpis.entanglement
-                + w2 * secondary.kpis.entanglement
-            ),
+            entanglement=(w1 * primary.kpis.entanglement + w2 * secondary.kpis.entanglement),
         )
 
-        chart_id = "ZC-" + hashlib.sha1(
-            ("|".join(blended) + str(payload)).encode()
-        ).hexdigest()[:8].upper()
+        chart_id = (
+            "ZC-"
+            + hashlib.sha1(("|".join(blended) + str(payload)).encode()).hexdigest()[:8].upper()
+        )
 
         return {
             "zero_shot": True,
@@ -597,9 +578,7 @@ class LivingPlaybook:
                 "mode": "zero_shot",
                 "path": synthetic["synthesized_path"],
                 "memory_id": synthetic["chart_id"],
-                "similarity": synthetic["similarities"][0]
-                if synthetic["similarities"]
-                else 0.0,
+                "similarity": synthetic["similarities"][0] if synthetic["similarities"] else 0.0,
                 "kpis": synthetic["blended_kpis"],
                 "prompt_tweak": synthetic["prompt_tweak"],
                 "ascension": synthetic["ascension"],

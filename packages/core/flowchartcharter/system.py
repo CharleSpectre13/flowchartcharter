@@ -64,7 +64,10 @@ class FlowChartCharterSystem:
             path_costs=dict(self.executives.cfo.path_costs),
         )
         if os.environ.get("FCC_VECTOR_BACKEND", "memory").lower() in (
-            "qdrant", "pinecone", "production", "auto"
+            "qdrant",
+            "pinecone",
+            "production",
+            "auto",
         ):
             self.muscle_db = ProductionMuscleMemory.from_env(quiet=True)
             # seed via classic adapter if production has storage
@@ -109,13 +112,19 @@ class FlowChartCharterSystem:
         for a in self.roster:
             self.elastic.register_agent(a)
         self.roster[0].muscle_memory_weights = {
-            "path_A": 1.4, "path_B": 0.9, "path_lite": 0.8,
+            "path_A": 1.4,
+            "path_B": 0.9,
+            "path_lite": 0.8,
         }
         self.roster[1].muscle_memory_weights = {
-            "path_A": 1.0, "path_B": 1.2, "path_lite": 0.9,
+            "path_A": 1.0,
+            "path_B": 1.2,
+            "path_lite": 0.9,
         }
         self.roster[2].muscle_memory_weights = {
-            "path_A": 1.5, "path_B": 0.7, "path_lite": 1.0,
+            "path_A": 1.5,
+            "path_B": 0.7,
+            "path_lite": 1.0,
         }
         self.skills = AgentSkillRuntime(
             router=self.router,
@@ -192,9 +201,7 @@ class FlowChartCharterSystem:
         )
         return str(result["chosen_path"])
 
-    def quantum_path_detail(
-        self, agent: Agent, paths: Sequence[str]
-    ) -> Dict[str, object]:
+    def quantum_path_detail(self, agent: Agent, paths: Sequence[str]) -> Dict[str, object]:
         return quantum_path_select(
             paths or self.PATHS,
             agent.muscle_memory_weights,
@@ -217,30 +224,19 @@ class FlowChartCharterSystem:
             AgentStatus.PROMOTED,
             AgentStatus.PHANTOM,
         ):
-            if not (
-                getattr(agent, "is_phantom", False)
-                and agent.status != AgentStatus.FIRED
-            ):
+            if not (getattr(agent, "is_phantom", False) and agent.status != AgentStatus.FIRED):
                 return False
         role = agent.role
-        if any(
-            x in role
-            for x in ("Audit", "Validator", "Chief", "Board", "General Manager")
-        ):
+        if any(x in role for x in ("Audit", "Validator", "Chief", "Board", "General Manager")):
             return False
         return True
 
     def _payload_entropy(self, workload_name: str) -> float:
         lower = workload_name.lower()
         base = 0.25
-        if any(
-            k in lower
-            for k in ("security", "audit", "messy", "legacy", "migration")
-        ):
+        if any(k in lower for k in ("security", "audit", "messy", "legacy", "migration")):
             base = 0.72
-        elif any(
-            k in lower for k in ("api", "integration", "realtime", "telemetry")
-        ):
+        elif any(k in lower for k in ("api", "integration", "realtime", "telemetry")):
             base = 0.45
         elif "sql" in lower or "novel" in lower:
             base = 0.85
@@ -279,11 +275,7 @@ class FlowChartCharterSystem:
         h_ctx = (
             context_entropy
             if context_entropy is not None
-            else (
-                contextual_entropy(payload)
-                if payload
-                else self._payload_entropy(workload_name)
-            )
+            else (contextual_entropy(payload) if payload else self._payload_entropy(workload_name))
         )
 
         phantom = self.elastic.evaluate(
@@ -348,9 +340,7 @@ class FlowChartCharterSystem:
             entropy=h_ctx,
             force_zero_shot=force_zero_shot,
         )
-        precedent = self.skills.QueryMuscleMemory(
-            state_vec, threshold=0.70, payload=payload_for_mm
-        )
+        precedent = self.skills.QueryMuscleMemory(state_vec, threshold=0.70, payload=payload_for_mm)
         trajectory = self.muscle_db.query_muscle_memory(
             payload_for_mm,
             similarity_threshold=0.70,
@@ -440,9 +430,7 @@ class FlowChartCharterSystem:
                 bias += 0.08
 
             schema_ok_hint = agent.termination_risk_index < 0.55
-            exec_path = (
-                path if path in ("path_A", "path_B", "path_lite") else "path_A"
-            )
+            exec_path = path if path in ("path_A", "path_B", "path_lite") else "path_A"
             # Live-Wire production path (TPC inject + Pydantic schema gate)
             if self.live_wire and force_quality is None:
                 constraints = list(getattr(agent, "playbook_constraints", []))
@@ -458,9 +446,7 @@ class FlowChartCharterSystem:
                 collapse = {
                     **collapse,
                     "live_wire": True,
-                    "provider": getattr(
-                        agent.llm_client.bridge.config, "provider", "mock"
-                    ),
+                    "provider": getattr(agent.llm_client.bridge.config, "provider", "mock"),
                 }
             else:
                 m = agent.execute_flow_unit(
@@ -516,21 +502,13 @@ class FlowChartCharterSystem:
             }
             survival_snaps.append(agent.survival_snapshot())
 
-        quality = (
-            force_quality
-            if force_quality is not None
-            else self._audit_quality(collected)
-        )
+        quality = force_quality if force_quality is not None else self._audit_quality(collected)
         mean_qs = (
             sum(float(s["Q_s"]) for s in schema_results) / len(schema_results)
             if schema_results
             else 1.0
         )
-        schema_ok = (
-            all(s.get("passed", True) for s in schema_results)
-            if schema_results
-            else True
-        )
+        schema_ok = all(s.get("passed", True) for s in schema_results) if schema_results else True
 
         audit = self.executives.validator.audit(
             workload_name,
@@ -544,10 +522,7 @@ class FlowChartCharterSystem:
         self.blackboard.post_vector(audit)
         charter.state.quality_score = quality
 
-        while (
-            not audit.passed
-            and charter.state.remediation_loops < charter.state.max_remediation
-        ):
+        while not audit.passed and charter.state.remediation_loops < charter.state.max_remediation:
             charter.state.remediation_loops += 1
             batch_q: List[float] = []
             for agent in self.roster:
@@ -566,8 +541,7 @@ class FlowChartCharterSystem:
                 )
                 path = str(collapse["chosen_path"])
                 m = agent.execute_flow_unit(
-                    f"{workload_name} remediate#"
-                    f"{charter.state.remediation_loops} via {path}",
+                    f"{workload_name} remediate#" f"{charter.state.remediation_loops} via {path}",
                     rng=self.rng,
                     quality_bias=0.15,
                     path=path,
@@ -582,12 +556,8 @@ class FlowChartCharterSystem:
                         agent.muscle_memory_weights,
                         m.quality_score,
                     )
-                path_trace[
-                    f"{agent.name}#r{charter.state.remediation_loops}"
-                ] = collapse
-            quality = (
-                self._audit_quality(collected[-3:]) if collected else quality
-            )
+                path_trace[f"{agent.name}#r{charter.state.remediation_loops}"] = collapse
+            quality = self._audit_quality(collected[-3:]) if collected else quality
             if batch_q:
                 agent_qualities.extend(batch_q)
             audit = self.executives.validator.audit(
@@ -612,9 +582,7 @@ class FlowChartCharterSystem:
         self.blackboard.post_vector(budget_vec)
 
         trust = audit.passed and quality >= 0.90
-        gov = self.executives.board.review_hand_off(
-            workload_name, trust=trust, quality=quality
-        )
+        gov = self.executives.board.review_hand_off(workload_name, trust=trust, quality=quality)
         self.blackboard.post_vector(gov)
         charter.state.trust_signal = gov.approve_hand_off
         self.last_trust = gov.approve_hand_off
@@ -662,9 +630,7 @@ class FlowChartCharterSystem:
                 agent_caps=self.roster_capability_map(),
                 entropy=h_ctx,
                 muscle_db=self.muscle_db,
-                rationale=(
-                    f"trust={trust} Q={quality:.3f} mode={living.get('mode')}"
-                ),
+                rationale=(f"trust={trust} Q={quality:.3f} mode={living.get('mode')}"),
             )
 
         snap: Dict[str, Any] = {
@@ -708,8 +674,7 @@ class FlowChartCharterSystem:
             "elastic": self.elastic.export(),
             "boss_prompt_loaded": bool(self.boss.system_prompt),
             "foundations_ref": (
-                "charter|living_playbook|ascension|muscle_memory|"
-                "fear_survival|elastic_phantom"
+                "charter|living_playbook|ascension|muscle_memory|" "fear_survival|elastic_phantom"
             ),
         }
         # Analytics Chief — immutable cycle handoff (async ledger)
@@ -732,9 +697,7 @@ class FlowChartCharterSystem:
         charter.bump()
         return snap
 
-    def downtime_sync(
-        self, telemetry: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    def downtime_sync(self, telemetry: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         tel = telemetry or {
             "path_stats": {
                 "path_A": {"success_rate": 0.92},
@@ -777,31 +740,25 @@ class FlowChartCharterSystem:
             dossier=dossier,
         )
         phantom_outcomes = self.elastic.resolve_phantoms(self.roster)
-        skill_result = self.skills.TriggerMondayMorningSync(
-            tel, roster=self.roster, boss=None
-        )
+        skill_result = self.skills.TriggerMondayMorningSync(tel, roster=self.roster, boss=None)
         skill_result["outcomes"] = outcomes
         skill_result["phantom_outcomes"] = phantom_outcomes
         # Ascension tick: evolution iteration advances on sync
         if self.playbook.horizon_reached:
             self.playbook.evolution_iteration += 1
             self.boss.playbook.append(
-                f"Ascension active — living playbook iter "
-                f"{self.playbook.evolution_iteration}"
+                f"Ascension active — living playbook iter " f"{self.playbook.evolution_iteration}"
             )
 
         fitness_snap = {
             a.name: round(a.calculate_fitness(), 4)
             for a in self.roster
-            if not isinstance(a, BossAgent)
-            and getattr(a, "talent_eligible", True)
-            and a.history
+            if not isinstance(a, BossAgent) and getattr(a, "talent_eligible", True) and a.history
         }
         survival_board = [
             a.survival_snapshot()
             for a in self.roster
-            if not isinstance(a, BossAgent)
-            and getattr(a, "talent_eligible", True)
+            if not isinstance(a, BossAgent) and getattr(a, "talent_eligible", True)
         ]
         muscle_snapshot = {
             a.name: dict(a.muscle_memory_weights)
@@ -848,18 +805,14 @@ class FlowChartCharterSystem:
             "active_ops_after_prune": active_ops,
             "boss_ack": self.boss_ack,
             "tool_schemas": [s["name"] for s in self.skills.tool_schemas()],
-            "blueprint_foundations": [
-                f["name"] for f in self.blueprint["foundations"]
-            ],
+            "blueprint_foundations": [f["name"] for f in self.blueprint["foundations"]],
         }
 
     def load_playbook(self, source, **kwargs) -> Dict[str, Any]:
         """Compile Charterfile YAML and hydrate GM / roster / CFO state."""
         return self.compiler.compile_and_hydrate(self, source, **kwargs)
 
-    def execute_compiled(
-        self, workload_name: str, **kwargs
-    ) -> Dict[str, Any]:
+    def execute_compiled(self, workload_name: str, **kwargs) -> Dict[str, Any]:
         """Run active compiled playbook units via Live-Wire + dynamic schemas."""
         if self.compiled_playbook is None:
             # fall back to standard charter

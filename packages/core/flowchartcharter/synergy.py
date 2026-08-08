@@ -8,10 +8,10 @@ input schema without transformation / translation tokens.
 where D ∈ [0, 1] is structural divergence (schema error rate between hand-offs).
 As D → 0, Q_s → 1. As D → 1, Q_s → exp(−k).
 """
+
 from __future__ import annotations
 import math
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
-
+from typing import Any, Dict, Mapping, Optional, Sequence, Set, Tuple
 
 DEFAULT_K = 3.0  # steeper decay → stricter hand-off contracts
 

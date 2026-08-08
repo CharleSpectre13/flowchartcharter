@@ -7,6 +7,7 @@ Separates macro-trend optimization from day-to-day GM execution.
 - RosterRecommendationDossier → Monday Morning Sync (GM executes, does not guess)
 - Cheat-code extraction into Muscle-Memory / Living Playbook when runs beat baseline
 """
+
 from __future__ import annotations
 
 import uuid
@@ -21,7 +22,6 @@ from .muscle_memory import (
     ExecutionMemoryRecord,
     MuscleMemoryVectorDB,
 )
-
 
 WORKWEEK_DAYS = 5
 MIN_SAMPLES_FOR_TREND = 2
@@ -143,16 +143,8 @@ class RosterRecommendationDossier:
             "baseline_quality": self.baseline_quality,
             "baseline_fitness": self.baseline_fitness,
             "notes": list(self.notes),
-            "promote": [
-                r.agent_name
-                for r in self.recommendations
-                if r.action == "PROMOTE"
-            ],
-            "terminate": [
-                r.agent_name
-                for r in self.recommendations
-                if r.action == "TERMINATE"
-            ],
+            "promote": [r.agent_name for r in self.recommendations if r.action == "PROMOTE"],
+            "terminate": [r.agent_name for r in self.recommendations if r.action == "TERMINATE"],
         }
 
     def action_map(self) -> Dict[str, str]:
@@ -215,18 +207,14 @@ class AnalyticsChief:
             )
             latency = float(last.execution_time) if last else 0.0
             expected_latency = (
-                float(last.expected_time)
-                if last and last.expected_time > 0
-                else max(latency, 1e-6)
+                float(last.expected_time) if last and last.expected_time > 0 else max(latency, 1e-6)
             )
             q = float(last.quality_score) if last else quality
             fit = agent.calculate_fitness() if agent.history else 0.0
 
             path = ""
             tweak = ""
-            if agent.name in path_trace and isinstance(
-                path_trace[agent.name], dict
-            ):
+            if agent.name in path_trace and isinstance(path_trace[agent.name], dict):
                 tr = path_trace[agent.name]
                 path = str(tr.get("chosen_path") or "")
                 tweak = str(tr.get("prompt_tweak") or "")
@@ -271,15 +259,13 @@ class AnalyticsChief:
         return self.days_ready() >= self.workweek_days
 
     def _window_snapshots(self) -> List[DailyTelemetrySnapshot]:
-        window = self._day_ledger[-self.workweek_days:]
+        window = self._day_ledger[-self.workweek_days :]
         out: List[DailyTelemetrySnapshot] = []
         for day in window:
             out.extend(day)
         return out
 
-    def _compute_trends(
-        self, snaps: Sequence[DailyTelemetrySnapshot]
-    ) -> List[AgentTrend]:
+    def _compute_trends(self, snaps: Sequence[DailyTelemetrySnapshot]) -> List[AgentTrend]:
         by_agent: Dict[str, List[DailyTelemetrySnapshot]] = defaultdict(list)
         for s in snaps:
             by_agent[s.agent_name].append(s)
@@ -346,9 +332,7 @@ class AnalyticsChief:
             ):
                 conf = min(
                     1.0,
-                    0.55
-                    + (bench * TERMINATE_MA_MULTIPLIER - t.fitness_ma)
-                    + 0.1 * t.risk_ma,
+                    0.55 + (bench * TERMINATE_MA_MULTIPLIER - t.fitness_ma) + 0.1 * t.risk_ma,
                 )
                 recs.append(
                     RosterActionRec(
@@ -430,10 +414,7 @@ class AnalyticsChief:
             lat_beat = 0.0
             if s.expected_latency > 0 and s.latency > 0:
                 lat_beat = 1.0 - (s.latency / s.expected_latency)
-            if (
-                token_beat < CHEAT_CODE_TOKEN_BEAT
-                and lat_beat < CHEAT_CODE_LATENCY_BEAT
-            ):
+            if token_beat < CHEAT_CODE_TOKEN_BEAT and lat_beat < CHEAT_CODE_LATENCY_BEAT:
                 continue
             if not s.flow_path and not s.path:
                 continue
@@ -474,8 +455,7 @@ class AnalyticsChief:
         """Triggered every 5 days. Produces dossier + injects cheat codes."""
         if not force and not self.workweek_complete():
             self.audit_log.append(
-                f"Audit deferred: days={self.days_ready()}/"
-                f"{self.workweek_days}"
+                f"Audit deferred: days={self.days_ready()}/" f"{self.workweek_days}"
             )
             return None
 
@@ -489,9 +469,7 @@ class AnalyticsChief:
 
         self.week_index += 1
         dossier = RosterRecommendationDossier(
-            dossier_id=(
-                f"DOSS-{self.week_index:04d}-{uuid.uuid4().hex[:6].upper()}"
-            ),
+            dossier_id=(f"DOSS-{self.week_index:04d}-{uuid.uuid4().hex[:6].upper()}"),
             week_index=self.week_index,
             days_covered=min(self.workweek_days, max(1, self.days_ready())),
             generated_at_cycle=self.cycle_counter,
@@ -502,8 +480,7 @@ class AnalyticsChief:
             notes=[
                 f"5-day MA window; samples={len(snaps)}",
                 f"promotions={sum(1 for r in recs if r.action == 'PROMOTE')}",
-                f"terminations="
-                f"{sum(1 for r in recs if r.action == 'TERMINATE')}",
+                f"terminations=" f"{sum(1 for r in recs if r.action == 'TERMINATE')}",
                 f"cheat_codes={len(cheats)}",
             ],
         )
@@ -558,8 +535,7 @@ class AnalyticsChief:
                     agent_caps={"general": 1.0},
                     entropy=0.25,
                     rationale=(
-                        f"EOW cheat code savings={cc.savings_ratio:.0%} "
-                        f"from {cc.agent_name}"
+                        f"EOW cheat code savings={cc.savings_ratio:.0%} " f"from {cc.agent_name}"
                     ),
                 )
         return count
@@ -573,8 +549,6 @@ class AnalyticsChief:
             "cycle_counter": self.cycle_counter,
             "workweek_days": self.workweek_days,
             "workweek_complete": self.workweek_complete(),
-            "last_dossier": (
-                self.last_dossier.to_dict() if self.last_dossier else None
-            ),
+            "last_dossier": (self.last_dossier.to_dict() if self.last_dossier else None),
             "audit_log": list(self.audit_log[-20:]),
         }

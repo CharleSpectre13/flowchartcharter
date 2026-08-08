@@ -1,4 +1,5 @@
 """Head Coach / GM initialization directives — exact system prompts."""
+
 from __future__ import annotations
 
 BOSS_AGENT_SYSTEM_PROMPT = """[SYSTEM PROMPT BEGIN]

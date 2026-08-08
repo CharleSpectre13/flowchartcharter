@@ -11,6 +11,7 @@ Memory safety:
   - load_playbook() replaces registry atomically after successful compile
   - Previous models are unreferenced so GC can reclaim them
 """
+
 from __future__ import annotations
 
 import gc
@@ -161,9 +162,7 @@ class CompiledPlaybook:
     flow_units: List[CompiledFlowUnit]
     source_path: str = ""
     compiled_at: float = field(default_factory=time.time)
-    playbook_id: str = field(
-        default_factory=lambda: f"PB-{uuid.uuid4().hex[:8].upper()}"
-    )
+    playbook_id: str = field(default_factory=lambda: f"PB-{uuid.uuid4().hex[:8].upper()}")
     # model registry for this playbook only (hot-reload drops previous)
     _models: Dict[str, Type[BaseModel]] = field(default_factory=dict, repr=False)
 
@@ -596,12 +595,9 @@ def execute_playbook_unit_live(
     client = client or getattr(agent, "llm_client", None) or LLMExecutionClient()
     constraints = list(getattr(agent, "playbook_constraints", []))
     constraints.append(f"Flow Unit {unit.id}: {unit.description}")
+    constraints.append(f"Required JSON schema fields: {list(unit.schema_raw.keys())}")
     constraints.append(
-        f"Required JSON schema fields: {list(unit.schema_raw.keys())}"
-    )
-    constraints.append(
-        f"Expected tokens≈{unit.expected_tokens}, "
-        f"latency≈{unit.expected_latency_ms}ms"
+        f"Expected tokens≈{unit.expected_tokens}, " f"latency≈{unit.expected_latency_ms}ms"
     )
 
     # Build example shape for the model
@@ -653,9 +649,7 @@ def execute_playbook_unit_live(
         agent.history.append(
             ExecutionMetrics(
                 token_cost=tokens,
-                execution_time=max(
-                    0.001, unit.expected_latency_ms / 1000.0
-                ),
+                execution_time=max(0.001, unit.expected_latency_ms / 1000.0),
                 quality_score=resp.output.quality if gate["valid"] else 0.4,
                 synergy_score=1.0 if gate["valid"] else 0.5,
                 expected_token_cost=unit.expected_tokens,
@@ -683,9 +677,7 @@ def run_compiled_playbook(
     playbook: Optional[CompiledPlaybook] = None,
 ) -> Dict[str, Any]:
     """Execute all flow units in order using role-matched agents + Live-Wire."""
-    pb: Optional[CompiledPlaybook] = playbook or getattr(
-        system, "compiled_playbook", None
-    )
+    pb: Optional[CompiledPlaybook] = playbook or getattr(system, "compiled_playbook", None)
     if pb is None:
         raise PlaybookCompileError("No compiled playbook loaded on system")
 
@@ -713,8 +705,7 @@ def run_compiled_playbook(
                 (
                     a
                     for a in system.roster
-                    if not isinstance(a, BossAgent)
-                    and a.status != AgentStatus.FIRED
+                    if not isinstance(a, BossAgent) and a.status != AgentStatus.FIRED
                 ),
                 None,
             )

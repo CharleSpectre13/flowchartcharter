@@ -1,7 +1,8 @@
 """Strict JSON performance vectors — executive wire format (no free-form NL)."""
+
 from __future__ import annotations
 from dataclasses import dataclass, field, asdict
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, Literal, Union
 import json
 
 

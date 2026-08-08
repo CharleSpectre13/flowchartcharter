@@ -32,7 +32,9 @@ class Blackboard:
             self.logs.append(f"rejected:invalid-vector:{payload.get('type')}")
             return False
         self.executive_vectors.append(payload)
-        self.logs.append(f"vector:{payload.get('type')}:{payload.get('charter_id') or payload.get('marker')}")
+        self.logs.append(
+            f"vector:{payload.get('type')}:{payload.get('charter_id') or payload.get('marker')}"
+        )
         return True
 
     def volunteer_bind(self, agents: List[Agent], temperature: float = 1.0) -> Dict[str, str]:

@@ -5,6 +5,7 @@ Audit patches V1–V3:
   V2 Bounded exponential speed score
   V3 Elastic / phantom handled at system layer (see elastic.py)
 """
+
 from __future__ import annotations
 
 import math
@@ -36,9 +37,7 @@ class TypedFlowUnit:
             raise ValueError("historical_success_rate must be in [0, 1]")
         if self.avg_token_cost < 0:
             raise ValueError("avg_token_cost must be non-negative")
-        self.handles_uncertainty = max(
-            0.0, min(1.0, float(self.handles_uncertainty))
-        )
+        self.handles_uncertainty = max(0.0, min(1.0, float(self.handles_uncertainty)))
 
 
 @dataclass
@@ -110,8 +109,7 @@ class ReferenceQuantumRouter:
         h = max(0.0, min(1.0, context_entropy))
         history = unit.historical_success_rate * 0.7
         entropy_term = (
-            unit.handles_uncertainty * h
-            + (1.0 - unit.handles_uncertainty) * (1.0 - h)
+            unit.handles_uncertainty * h + (1.0 - unit.handles_uncertainty) * (1.0 - h)
         ) * 0.3
         return history + entropy_term
 
@@ -121,9 +119,7 @@ class ReferenceQuantumRouter:
         available_units: Sequence[TypedFlowUnit],
         cfo_budget: int,
     ) -> TypedFlowUnit:
-        valid_units = [
-            u for u in available_units if u.avg_token_cost <= cfo_budget
-        ]
+        valid_units = [u for u in available_units if u.avg_token_cost <= cfo_budget]
         if not valid_units:
             raise CFOHaltError(cfo_budget, len(available_units))
 
@@ -148,9 +144,7 @@ class ReferenceQuantumRouter:
             "cfo_budget": cfo_budget,
             "candidates": len(valid_units),
             "blocked": len(available_units) - len(valid_units),
-            "probabilities": {
-                uid: round(p / total, 4) for uid, p in scores.items()
-            },
+            "probabilities": {uid: round(p / total, 4) for uid, p in scores.items()},
             "confidence": 1.0,
             "operator": "M = Charter @ RhythmMarker",
         }
@@ -202,18 +196,14 @@ class WorkerAgent:
         if success:
             self.fitness.q_success += 1
         if self.fitness.q_total > 1:
-            self.fitness.actual_latency_ms = (
-                self.fitness.actual_latency_ms + delta_t_ms
-            ) / 2.0
+            self.fitness.actual_latency_ms = (self.fitness.actual_latency_ms + delta_t_ms) / 2.0
         else:
             self.fitness.actual_latency_ms = delta_t_ms
         self.fitness.actual_tokens_used += tokens
         if expected_tokens is not None:
             self.fitness.expected_tokens = expected_tokens
         else:
-            self.fitness.expected_tokens = max(
-                self.fitness.expected_tokens, tokens
-            )
+            self.fitness.expected_tokens = max(self.fitness.expected_tokens, tokens)
         if expected_latency_ms is not None:
             self.fitness.expected_latency_ms = expected_latency_ms
         self.fitness.entanglement_errors += max(0, entanglement_errors)
@@ -263,17 +253,12 @@ class BossAgent:
 
         outcomes: Dict[str, str] = {}
         avg_score = (
-            sum(fitness_scores.values()) / max(1, len(fitness_scores))
-            if fitness_scores
-            else 0.0
+            sum(fitness_scores.values()) / max(1, len(fitness_scores)) if fitness_scores else 0.0
         )
 
         for a_id, score in fitness_scores.items():
             agent = self.roster[a_id]
-            if (
-                score < (avg_score * 0.7)
-                or agent.fitness.entanglement_errors > 3
-            ):
+            if score < (avg_score * 0.7) or agent.fitness.entanglement_errors > 3:
                 self.roster[a_id].status = "FIRED"
                 outcomes[a_id] = "FIRED"
                 msg = (
@@ -297,9 +282,7 @@ class BossAgent:
             print("Sync complete. Bar raised.")
         return {
             "outcomes": outcomes,
-            "fitness_scores": {
-                k: round(v, 4) for k, v in fitness_scores.items()
-            },
+            "fitness_scores": {k: round(v, 4) for k, v in fitness_scores.items()},
             "avg_score": round(avg_score, 4),
             "playbook": list(self.playbook),
         }

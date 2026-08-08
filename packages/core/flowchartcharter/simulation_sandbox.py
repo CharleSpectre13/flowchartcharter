@@ -7,6 +7,7 @@ requiring live LLM keys. Verifies:
   - Analytics 5-day cadence → dossier-driven Monday Sync
   - API Nervous System contracts (optional TestClient)
 """
+
 from __future__ import annotations
 
 import os
@@ -151,9 +152,7 @@ class SimulationSandbox:
             notes=notes,
         )
 
-    def run_all(
-        self, scenarios: Optional[List[SandboxScenario]] = None
-    ) -> Dict[str, Any]:
+    def run_all(self, scenarios: Optional[List[SandboxScenario]] = None) -> Dict[str, Any]:
         scenarios = scenarios or DEFAULT_SCENARIOS
         reports = [self.run_scenario(s) for s in scenarios]
         return {
@@ -190,9 +189,7 @@ class SimulationSandbox:
             "roster": r.status_code == 200,
             "monday": m.status_code == 200,
             "analytics": a.status_code == 200,
-            "passed": all(
-                x.status_code == 200 for x in (h, w, r, m, a)
-            ),
+            "passed": all(x.status_code == 200 for x in (h, w, r, m, a)),
         }
 
 

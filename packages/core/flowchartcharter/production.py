@@ -6,6 +6,7 @@ Phase 1 Launch Roadmap:
   - Pydantic schema gate → entanglement_errors on violation
   - Async fan-out helpers for Boss Agent rhythm (max parallelism, zero idle)
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -39,7 +40,6 @@ from .muscle_memory import (
     encode_state,
 )
 from .survival import GenerationParameters, generation_params_for_risk
-
 
 # =============================================================================
 # 1. Strict LLM output schema (Boss Agent handoff contract)
@@ -109,9 +109,7 @@ def validate_llm_output(
         text = raw.strip()
         if text.startswith("```"):
             lines = text.split("\n")
-            text = "\n".join(
-                ln for ln in lines if not ln.strip().startswith("```")
-            )
+            text = "\n".join(ln for ln in lines if not ln.strip().startswith("```"))
         try:
             data = json.loads(text)
         except json.JSONDecodeError as exc:
@@ -214,9 +212,10 @@ class LLMExecutionClient:
 
     def build_system_prompt(self, req: LLMExecutionRequest) -> str:
         gen = self.generation_for_risk(req.termination_risk_index)
-        constraints = "\n".join(
-            f"  - {c}" for c in req.playbook_constraints
-        ) or "  - Follow Typed Flow Unit contracts exactly."
+        constraints = (
+            "\n".join(f"  - {c}" for c in req.playbook_constraints)
+            or "  - Follow Typed Flow Unit contracts exactly."
+        )
         return (
             f"{req.system_prompt}\n\n"
             f"=== FLOWCHARTCHARTER PLAYBOOK CONSTRAINTS ===\n"
@@ -315,9 +314,7 @@ class EmbeddingProvider:
         self.dims = dims
         self.api_key = api_key or os.environ.get("FCC_EMBED_API_KEY", "")
         self.base_url = base_url or os.environ.get("FCC_EMBED_BASE_URL", "")
-        self.model = model or os.environ.get(
-            "FCC_EMBED_MODEL", "text-embedding-3-small"
-        )
+        self.model = model or os.environ.get("FCC_EMBED_MODEL", "text-embedding-3-small")
 
     def embed(self, payload: Mapping[str, Any]) -> List[float]:
         text = json.dumps(payload, sort_keys=True, default=str)
@@ -376,9 +373,7 @@ class InMemoryVectorBackend:
     def __init__(self) -> None:
         self.points: Dict[str, Tuple[List[float], Dict[str, Any]]] = {}
 
-    def upsert(
-        self, point_id: str, vector: Sequence[float], payload: Mapping[str, Any]
-    ) -> None:
+    def upsert(self, point_id: str, vector: Sequence[float], payload: Mapping[str, Any]) -> None:
         self.points[point_id] = (list(vector), dict(payload))
 
     def search(
@@ -456,9 +451,7 @@ class QdrantVectorBackend:
             except Exception:  # noqa: BLE001
                 pass
 
-    def upsert(
-        self, point_id: str, vector: Sequence[float], payload: Mapping[str, Any]
-    ) -> None:
+    def upsert(self, point_id: str, vector: Sequence[float], payload: Mapping[str, Any]) -> None:
         if not self.enabled:
             return
         # Qdrant wants UUID or unsigned int — hash string ids
@@ -540,9 +533,7 @@ class PineconeVectorBackend:
             raw = resp.read().decode()
             return json.loads(raw) if raw else {}
 
-    def upsert(
-        self, point_id: str, vector: Sequence[float], payload: Mapping[str, Any]
-    ) -> None:
+    def upsert(self, point_id: str, vector: Sequence[float], payload: Mapping[str, Any]) -> None:
         if not self.enabled:
             return
         self._request(
@@ -661,10 +652,7 @@ class ProductionMuscleMemory:
         payload["record_json"] = json.dumps(payload, default=str)
         self.backend.upsert(record.memory_id, vec, payload)
         if not self.quiet:
-            print(
-                f"[Muscle-Memory/{self.backend_name}] committed "
-                f"{record.memory_id}"
-            )
+            print(f"[Muscle-Memory/{self.backend_name}] committed " f"{record.memory_id}")
 
     def query_muscle_memory(
         self,
@@ -683,9 +671,7 @@ class ProductionMuscleMemory:
             or ""
         )
         cur_state = (
-            list(state_vector)
-            if state_vector is not None
-            else self.encode_state(current_payload)
+            list(state_vector) if state_vector is not None else self.encode_state(current_payload)
         )
         # Same feature packing as commit_memory for embedding alignment
         query_vec = self.embed_workload(
@@ -722,9 +708,7 @@ class ProductionMuscleMemory:
         self.hits += 1
         return self._payload_to_record(best_payload)
 
-    def _payload_to_record(
-        self, payload: Mapping[str, Any]
-    ) -> ExecutionMemoryRecord:
+    def _payload_to_record(self, payload: Mapping[str, Any]) -> ExecutionMemoryRecord:
         if "record_json" in payload and isinstance(payload["record_json"], str):
             try:
                 payload = json.loads(payload["record_json"])
@@ -737,9 +721,7 @@ class ProductionMuscleMemory:
             memory_id=str(payload.get("memory_id") or f"MEM-{uuid.uuid4().hex[:8]}"),
             job_type=str(payload.get("job_type") or "unknown"),
             state_vector=list(payload.get("state_vector") or [0.5, 0.5, 1.0, 0.1]),
-            successful_flow_path=list(
-                payload.get("successful_flow_path") or ["path_A"]
-            ),
+            successful_flow_path=list(payload.get("successful_flow_path") or ["path_A"]),
             entanglement_score=float(payload.get("entanglement_score") or 0.9),
             prompt_tweak=str(payload.get("prompt_tweak") or ""),
             quality=float(payload.get("quality") or 0.9),
@@ -863,9 +845,7 @@ def apply_execution_to_agent(agent: Any, result: WorkerTaskResult) -> None:
         m = ExecutionMetrics(
             token_cost=resp.output.tokens,
             execution_time=max(0.001, resp.latency_ms / 1000.0),
-            quality_score=resp.output.quality if resp.ok else min(
-                resp.output.quality, 0.5
-            ),
+            quality_score=resp.output.quality if resp.ok else min(resp.output.quality, 0.5),
             synergy_score=1.0 if resp.ok else 0.5,
             expected_token_cost=resp.output.tokens,
             expected_time=max(0.001, resp.latency_ms / 1000.0),

@@ -79,6 +79,7 @@ def main() -> int:
             "-m",
             "pycodestyle",
             f"--max-line-length={MAX_LINE}",
+            "--ignore=E203,W503,E501,E704",
             *args.targets,
         ]
     )

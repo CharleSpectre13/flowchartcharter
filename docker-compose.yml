@@ -1,0 +1,66 @@
+# FlowChartCharter Enterprise stack
+# API Nervous System + Qdrant Muscle-Memory vector DB
+#
+#   docker compose up --build
+#   open http://localhost:8090/docs
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.12.1
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: 6334
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/6333'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: flowchart-charter-engine:1.4.0
+    restart: unless-stopped
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    ports:
+      - "8090:8090"
+    environment:
+      FCC_HOST: "0.0.0.0"
+      FCC_PORT: "8090"
+      FCC_LIVE_WIRE: "1"
+      FCC_LLM_PROVIDER: "${FCC_LLM_PROVIDER:-mock}"
+      FCC_LLM_API_KEY: "${FCC_LLM_API_KEY:-}"
+      FCC_LLM_MODEL: "${FCC_LLM_MODEL:-grok-2}"
+      FCC_VECTOR_BACKEND: "qdrant"
+      FCC_QDRANT_URL: "http://qdrant:6333"
+      FCC_QDRANT_COLLECTION: "flowchartcharter_muscle_memory"
+      FCC_CORS_ORIGINS: "*"
+      FCC_SEED: "42"
+    volumes:
+      - ./examples/charterfiles:/app/charterfiles:ro
+      - engine_data:/app/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=3)",
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  qdrant_data:
+  engine_data:

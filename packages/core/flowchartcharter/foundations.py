@@ -1,4 +1,5 @@
 """Five (+1) Foundational Structures — spreadsheet + Arch Spec DNA."""
+
 from __future__ import annotations
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, List
@@ -55,9 +56,7 @@ FOUNDATIONS: List[FoundationalStructure] = [
             "Token Efficiency (β-weighted cost reduction); "
             "Flow Unit Success Rate (Q_success / Q_total)."
         ),
-        rhythm_goal=(
-            "Well-oiled machine effect: modular chunks with zero micro-management."
-        ),
+        rhythm_goal=("Well-oiled machine effect: modular chunks with zero micro-management."),
         sources="Drive:ArchSpec, Spreadsheet, IMG:playbook",
     ),
     FoundationalStructure(
@@ -73,12 +72,9 @@ FOUNDATIONS: List[FoundationalStructure] = [
         ),
         hierarchy_role="Position Managers, Key Players, CFO (Resource Auditor)",
         performance_metric=(
-            "Quality Threshold Pass Rate (γ-weighted reliability); "
-            "Time Delta Efficiency (1/Δt)."
+            "Quality Threshold Pass Rate (γ-weighted reliability); " "Time Delta Efficiency (1/Δt)."
         ),
-        rhythm_goal=(
-            "Facilitates entanglement and synchronizes agent actions before commit."
-        ),
+        rhythm_goal=("Facilitates entanglement and synchronizes agent actions before commit."),
         sources="Spreadsheet, skill:rhythm-marker-validator",
     ),
     FoundationalStructure(
@@ -97,9 +93,7 @@ FOUNDATIONS: List[FoundationalStructure] = [
             "Autonomous Correction Rate (human-out-of-loop ratio); "
             "Entanglement Synergy Score (Q_entanglement)."
         ),
-        rhythm_goal=(
-            "Viral Dance effect: high-speed execution from previous job experience."
-        ),
+        rhythm_goal=("Viral Dance effect: high-speed execution from previous job experience."),
         sources="Drive:Blueprint, Spreadsheet",
     ),
     FoundationalStructure(
@@ -118,9 +112,7 @@ FOUNDATIONS: List[FoundationalStructure] = [
             "Earned Trust Coefficient (reduction in supervisor intervention); "
             "Token Cost Weight (γ)."
         ),
-        rhythm_goal=(
-            "Empowers the team to execute seamlessly without being overcorrected."
-        ),
+        rhythm_goal=("Empowers the team to execute seamlessly without being overcorrected."),
         sources="Drive:HeadCoach, Spreadsheet, IMG:playbook",
     ),
     FoundationalStructure(
@@ -136,9 +128,7 @@ FOUNDATIONS: List[FoundationalStructure] = [
         ),
         hierarchy_role="Boss Agent / General Manager",
         performance_metric="Promotion/Demotion Velocity (optimization rate in downtime).",
-        rhythm_goal=(
-            "Raises the bar through structured communication during system downtime."
-        ),
+        rhythm_goal=("Raises the bar through structured communication during system downtime."),
         sources="Spreadsheet, Drive:Blueprint, IMG:playbook",
     ),
 ]

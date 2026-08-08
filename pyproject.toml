@@ -1,22 +1,43 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "flowchart-charter-engine"
 version = "1.4.0"
-description = "FlowChartCharter — execution-first multi-agent state-chart engine (TPC, Muscle-Memory, Analytics Chief, API Nervous System)"
+description = "Execution-first multi-agent engine: YAML Charterfiles, TPC fear metrics, Muscle-Memory vectors, Boss hierarchy — the process alternative to GraphRAG."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
-authors = [{ name = "CharleSpectre13" }]
+authors = [
+  { name = "CharleSpectre13", email = "charlespectre13@gmail.com" },
+]
+maintainers = [
+  { name = "CharleSpectre13" },
+]
 keywords = [
   "agents",
+  "multi-agent",
   "flowchart",
+  "charterfile",
   "state-machine",
   "muscle-memory",
   "graphrag-alternative",
   "fastapi",
+  "orchestration",
+  "tpc",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Framework :: FastAPI",
+  "Operating System :: OS Independent",
 ]
 dependencies = [
   "fastapi>=0.115.0",
@@ -27,16 +48,61 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["httpx>=0.27.0", "pycodestyle>=2.11", "pyflakes>=3.2"]
+dev = [
+  "httpx>=0.27.0",
+  "pycodestyle>=2.11",
+  "pyflakes>=3.2",
+  "pytest>=8.0",
+  "black>=24.0",
+  "build>=1.0",
+  "twine>=5.0",
+]
+vector = [
+  # Optional SDK clients — REST backends work without these
+  "qdrant-client>=1.9.0",
+]
+all = [
+  "flowchart-charter-engine[dev,vector]",
+]
 
 [project.scripts]
 flowchartcharter = "flowchartcharter.api_server:main"
 fcc-sandbox = "flowchartcharter.simulation_sandbox:run_phase2_sandbox"
+fcc-audit = "flowchartcharter.cli:audit_main"
 
 [project.urls]
 Homepage = "https://github.com/CharleSpectre13/flowchartcharter"
+Documentation = "https://github.com/CharleSpectre13/flowchartcharter#readme"
 Repository = "https://github.com/CharleSpectre13/flowchartcharter"
+Issues = "https://github.com/CharleSpectre13/flowchartcharter/issues"
+"Bug Tracker" = "https://github.com/CharleSpectre13/flowchartcharter/issues"
+
+[tool.setuptools]
+include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["packages/core"]
 include = ["flowchartcharter*"]
+
+[tool.setuptools.package-data]
+flowchartcharter = ["py.typed"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+extend-exclude = '''
+/(
+  \.git
+  | dist
+  | build
+  | \.venv
+)/
+'''
+
+[tool.pytest.ini_options]
+testpaths = ["examples"]
+python_files = ["test_*.py"]
+addopts = "-q"
+
+[tool.pycodestyle]
+max-line-length = 100

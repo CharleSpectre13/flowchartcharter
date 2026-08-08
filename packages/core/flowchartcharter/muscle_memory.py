@@ -9,6 +9,7 @@ Blueprint quadrants per record:
 GraphRAG: unstructured graph → chunks → reason from scratch → high cost/latency
 Muscle-Memory: execution vectors → deterministic playbook → execute immediately
 """
+
 from __future__ import annotations
 
 import json
@@ -16,7 +17,6 @@ import math
 import uuid
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
-
 
 # =============================================================================
 # SCHEMA
@@ -111,17 +111,12 @@ class MuscleMemoryVectorDB:
 
     def __post_init__(self) -> None:
         if not self.quiet:
-            print(
-                "[Muscle-Memory DB] Initialized high-speed vector "
-                "memory repository."
-            )
+            print("[Muscle-Memory DB] Initialized high-speed vector " "memory repository.")
 
     def encode_state(self, data_payload: Mapping[str, Any]) -> List[float]:
         return encode_state(data_payload)
 
-    def cosine_similarity(
-        self, v1: Sequence[float], v2: Sequence[float]
-    ) -> float:
+    def cosine_similarity(self, v1: Sequence[float], v2: Sequence[float]) -> float:
         return cosine_similarity(v1, v2)
 
     def commit_memory(self, record: ExecutionMemoryRecord) -> None:
@@ -144,16 +139,13 @@ class MuscleMemoryVectorDB:
     ) -> Optional[ExecutionMemoryRecord]:
         """Find near-identical past job; return cheat sheet or None (charter fallback)."""
         current_vector = (
-            list(state_vector)
-            if state_vector is not None
-            else self.encode_state(current_payload)
+            list(state_vector) if state_vector is not None else self.encode_state(current_payload)
         )
         if not self.storage:
             self.misses += 1
             if not self.quiet:
                 print(
-                    "[Muscle-Memory MISS] Empty store. "
-                    "Falling back to standard Charter pathing."
+                    "[Muscle-Memory MISS] Empty store. " "Falling back to standard Charter pathing."
                 )
             return None
 
@@ -194,9 +186,7 @@ class MuscleMemoryVectorDB:
     ) -> List[Dict[str, Any]]:
         """Multi-hit query for skill / system integration."""
         current_vector = (
-            list(state_vector)
-            if state_vector is not None
-            else self.encode_state(current_payload)
+            list(state_vector) if state_vector is not None else self.encode_state(current_payload)
         )
         scored: List[Tuple[float, ExecutionMemoryRecord]] = []
         for record in self.storage:
@@ -206,17 +196,19 @@ class MuscleMemoryVectorDB:
         scored.sort(key=lambda x: x[0], reverse=True)
         out: List[Dict[str, Any]] = []
         for sim, rec in scored[:top_k]:
-            out.append({
-                "memory_id": rec.memory_id,
-                "job_type": rec.job_type,
-                "similarity": round(sim, 4),
-                "successful_flow_path": list(rec.successful_flow_path),
-                "entanglement_score": rec.entanglement_score,
-                "prompt_tweak": rec.prompt_tweak,
-                "quality": rec.quality,
-                "token_cost": rec.token_cost,
-                "tags": list(rec.tags),
-            })
+            out.append(
+                {
+                    "memory_id": rec.memory_id,
+                    "job_type": rec.job_type,
+                    "similarity": round(sim, 4),
+                    "successful_flow_path": list(rec.successful_flow_path),
+                    "entanglement_score": rec.entanglement_score,
+                    "prompt_tweak": rec.prompt_tweak,
+                    "quality": rec.quality,
+                    "token_cost": rec.token_cost,
+                    "tags": list(rec.tags),
+                }
+            )
         return out
 
     def stats(self) -> Dict[str, Any]:
@@ -247,9 +239,7 @@ def seed_legacy_refactor(db: MuscleMemoryVectorDB) -> ExecutionMemoryRecord:
             "U8_DeterministicRefactor",
         ],
         entanglement_score=0.98,
-        prompt_tweak=(
-            "Ensure strict camelCase enforcement during token parsing."
-        ),
+        prompt_tweak=("Ensure strict camelCase enforcement during token parsing."),
         quality=0.98,
         token_cost=420,
         tags=("legacy", "refactor"),

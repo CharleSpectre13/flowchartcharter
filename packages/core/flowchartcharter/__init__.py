@@ -1,4 +1,5 @@
 """FlowChartCharter core — execution-and-quality-first multi-agent state-charts."""
+
 from .metrics import ExecutionMetrics
 from .agents import Agent, BossAgent, AgentStatus, WorkerNode
 from .blackboard import Blackboard, TaskRequest
@@ -271,6 +272,5 @@ __all__ = [
 ]
 
 
-
-
+_REEXPORT_FITNESS = (DEFAULT_ALPHA, DEFAULT_BETA, DEFAULT_GAMMA, DEFAULT_DELTA)
 __version__ = "1.4.0"

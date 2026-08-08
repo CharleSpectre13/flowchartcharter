@@ -168,16 +168,8 @@ class Agent:
             path = "path_lite"
 
         baseline = PATH_EXPECTED.get(path, PATH_EXPECTED["path_A"])
-        exp_tok = (
-            expected_tokens
-            if expected_tokens is not None
-            else int(baseline["tokens"])
-        )
-        exp_time = (
-            expected_time
-            if expected_time is not None
-            else float(baseline["time"])
-        )
+        exp_tok = expected_tokens if expected_tokens is not None else int(baseline["tokens"])
+        exp_time = expected_time if expected_time is not None else float(baseline["time"])
 
         if path == "path_lite":
             cost = r.randint(60, 120)
@@ -254,8 +246,7 @@ class Agent:
             termination_risk_index=self.termination_risk_index,
             system_prompt=self.system_prompt,
             playbook_constraints=constraints,
-            expected_output_keys=expected_output_keys
-            or ["result", "quality", "path", "tokens"],
+            expected_output_keys=expected_output_keys or ["result", "quality", "path", "tokens"],
             agent_name=self.name,
             role=self.role,
         )
@@ -276,9 +267,7 @@ class Agent:
     def calculate_fitness(self) -> float:
         return fitness(self.history)
 
-    def volunteer_score(
-        self, task_embedding: Dict[str, float], temperature: float = 1.0
-    ) -> float:
+    def volunteer_score(self, task_embedding: Dict[str, float], temperature: float = 1.0) -> float:
         if self.status == AgentStatus.FIRED:
             return 0.0
         score = 0.0
@@ -389,9 +378,7 @@ class BossAgent(Agent):
                 agent.corporate_rank = 0.0
                 agent.refresh_survival_prompt()
                 outcomes[name] = "FIRED"
-                self.playbook.append(
-                    f"Board TERMINATE {name} via {dossier.dossier_id}"
-                )
+                self.playbook.append(f"Board TERMINATE {name} via {dossier.dossier_id}")
                 if lean_rehire:
                     surviving = sum(
                         1
@@ -414,31 +401,23 @@ class BossAgent(Agent):
             elif action == "PROMOTE":
                 agent.status = AgentStatus.PROMOTED
                 agent.corporate_rank = min(10.0, agent.corporate_rank + 1.0)
-                agent.termination_risk_index = max(
-                    0.0, agent.termination_risk_index - 0.08
-                )
+                agent.termination_risk_index = max(0.0, agent.termination_risk_index - 0.08)
                 if getattr(agent, "is_phantom", False):
                     agent.is_phantom = False
                 agent.refresh_survival_prompt()
                 outcomes[name] = "PROMOTED"
-                self.playbook.append(
-                    f"Board PROMOTE {name} via {dossier.dossier_id}"
-                )
+                self.playbook.append(f"Board PROMOTE {name} via {dossier.dossier_id}")
             elif action == "DEMOTE":
                 agent.status = AgentStatus.DEMOTED
                 agent.corporate_rank = max(0.5, agent.corporate_rank - 0.5)
                 agent.refresh_survival_prompt()
                 outcomes[name] = "DEMOTED"
-                self.playbook.append(
-                    f"Board DEMOTE {name} via {dossier.dossier_id}"
-                )
+                self.playbook.append(f"Board DEMOTE {name} via {dossier.dossier_id}")
             else:
                 agent.status = AgentStatus.ACTIVE
                 agent.refresh_survival_prompt()
                 outcomes[name] = "RETAINED"
-                self.playbook.append(
-                    f"Board RETAIN {name} via {dossier.dossier_id}"
-                )
+                self.playbook.append(f"Board RETAIN {name} via {dossier.dossier_id}")
 
         # Agents not in dossier but on team: retain if active history
         for agent in team:
@@ -478,18 +457,14 @@ class BossAgent(Agent):
                     agent.status = AgentStatus.FIRED
                     agent.survival_status = SurvivalStatus.TERMINATED
                     outcomes[agent.name] = "FIRED"
-                    self.playbook.append(
-                        f"Fire unproven phantom {agent.name}"
-                    )
+                    self.playbook.append(f"Fire unproven phantom {agent.name}")
                 continue
 
             f = agent.calculate_fitness() if agent.history else 0.0
             risk = agent.termination_risk_index
             fire_floor = benchmark * 0.55
 
-            if should_fire_from_ledger(
-                risk, agent.ledger, f, fitness_floor=fire_floor
-            ):
+            if should_fire_from_ledger(risk, agent.ledger, f, fitness_floor=fire_floor):
                 agent.status = AgentStatus.FIRED
                 agent.survival_status = SurvivalStatus.TERMINATED
                 agent.corporate_rank = 0.0
@@ -523,9 +498,7 @@ class BossAgent(Agent):
             if getattr(agent, "is_phantom", False) and f >= benchmark * 1.15:
                 agent.status = AgentStatus.PROMOTED
                 agent.is_phantom = False
-                agent.termination_risk_index = max(
-                    0.0, agent.termination_risk_index - 0.3
-                )
+                agent.termination_risk_index = max(0.0, agent.termination_risk_index - 0.3)
                 agent.refresh_survival_prompt()
                 outcomes[agent.name] = "PHANTOM_HIRED"
                 continue
@@ -533,9 +506,7 @@ class BossAgent(Agent):
             if f >= benchmark * 1.2 and risk < 0.35:
                 agent.status = AgentStatus.PROMOTED
                 agent.corporate_rank = min(10.0, agent.corporate_rank + 1.0)
-                agent.termination_risk_index = max(
-                    0.0, agent.termination_risk_index - 0.08
-                )
+                agent.termination_risk_index = max(0.0, agent.termination_risk_index - 0.08)
                 agent.refresh_survival_prompt()
                 outcomes[agent.name] = "PROMOTED"
             elif f < benchmark * 0.75 or risk >= 0.55:
@@ -548,8 +519,7 @@ class BossAgent(Agent):
                 for p in list(agent.muscle_memory_weights.keys()):
                     agent.muscle_memory_weights[p] = max(
                         0.1,
-                        agent.muscle_memory_weights.get(p, 1.0)
-                        + r.uniform(-0.05, 0.12),
+                        agent.muscle_memory_weights.get(p, 1.0) + r.uniform(-0.05, 0.12),
                     )
                 agent.refresh_survival_prompt()
                 outcomes[agent.name] = "RETAINED"

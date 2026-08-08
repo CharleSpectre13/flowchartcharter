@@ -1,10 +1,11 @@
 """FlowChartCharter API Nervous System — FastAPI microservice wrapper.
 
-Phase 2 Live Launch: expose the v1.1+ engine so dashboards and enterprise
-tools can submit JSON workloads to the Boss Agent over HTTP.
+Phase 2–3 Live Launch: expose the engine so dashboards and enterprise
+tools can submit JSON workloads, load Charterfile YAML playbooks, and
+drive Monday Sync / Analytics over HTTP.
 
-Global application state keeps GM, Muscle-Memory VDB, Living Playbook, and
-Analytics Chief resident between requests (singleton lifespan).
+Global application state keeps GM, Muscle-Memory VDB, Living Playbook,
+Analytics Chief, and PlaybookCompiler resident between requests.
 """
 from __future__ import annotations
 
@@ -15,17 +16,13 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 from .agents import AgentStatus, BossAgent
 from .system import FlowChartCharterSystem
-
-# ---------------------------------------------------------------------------
-# Pydantic contracts (schema-enforced request/response — zero-hallucination)
-# ---------------------------------------------------------------------------
 
 
 class WorkloadSubmitRequest(BaseModel):
@@ -146,13 +143,19 @@ class HealthResponse(BaseModel):
     roster_size: int
 
 
+class LoadPlaybookResponse(BaseModel):
+    playbook_id: str
+    playbook_name: str
+    version: str
+    ops_roster: List[str]
+    token_budget: int
+    flow_path: List[str]
+    models: List[str]
+    load_count: int
+
+
 class PersonnelUpgradeRequest(BaseModel):
     model_class: str = Field(..., min_length=1, max_length=64)
-
-
-# ---------------------------------------------------------------------------
-# Application state (singleton)
-# ---------------------------------------------------------------------------
 
 
 class EngineState:
@@ -208,11 +211,6 @@ def _roster_nodes(system: FlowChartCharterSystem) -> List[RosterNodeStatus]:
     return nodes
 
 
-# ---------------------------------------------------------------------------
-# Lifespan + app factory
-# ---------------------------------------------------------------------------
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _STATE
@@ -227,10 +225,10 @@ def create_app() -> FastAPI:
         title="FlowChartCharter Engine API",
         description=(
             "Execution-first multi-agent nervous system. "
-            "Submit workloads to the Boss Agent; query roster TPC; "
-            "trigger Monday Sync and Analytics Chief 5-day protocol."
+            "Submit workloads, load Charterfile YAML playbooks, "
+            "query roster TPC, trigger Monday Sync and Analytics Chief."
         ),
-        version="1.3.1",
+        version="1.4.0",
         lifespan=lifespan,
     )
 
@@ -253,15 +251,13 @@ def create_app() -> FastAPI:
             },
         )
 
-    # ----- Health ----------------------------------------------------------
-
     @app.get("/health", response_model=HealthResponse, tags=["ops"])
     async def health() -> HealthResponse:
         st = get_state()
         return HealthResponse(
             status="ok",
             engine="FlowChartCharterSystem",
-            version="1.3.1",
+            version="1.4.0",
             uptime_s=round(st.uptime_s, 3),
             days_ready=st.system.analytics.days_ready(),
             roster_size=len(st.system.roster),
@@ -271,7 +267,7 @@ def create_app() -> FastAPI:
     async def root() -> Dict[str, Any]:
         return {
             "service": "FlowChartCharter Engine",
-            "version": "1.2.0",
+            "version": "1.4.0",
             "docs": "/docs",
             "endpoints": [
                 "POST /workload/submit",
@@ -280,11 +276,12 @@ def create_app() -> FastAPI:
                 "POST /system/advance-analytics",
                 "POST /system/end-of-week",
                 "POST /system/upgrade-personnel",
+                "POST /system/load-playbook",
+                "POST /system/execute-compiled",
+                "GET /system/playbook",
                 "GET /health",
             ],
         }
-
-    # ----- Workload --------------------------------------------------------
 
     @app.post(
         "/workload/submit",
@@ -299,7 +296,6 @@ def create_app() -> FastAPI:
         t0 = time.perf_counter()
 
         try:
-            # Offload sync engine to thread pool — keeps event loop free
             result = await asyncio.to_thread(
                 st.system.execute_charter,
                 body.workload,
@@ -309,14 +305,13 @@ def create_app() -> FastAPI:
                 force_zero_shot=body.force_zero_shot,
                 force_quality=body.force_quality,
             )
-        except Exception as exc:  # noqa: BLE001 — surface as 400
+        except Exception as exc:  # noqa: BLE001
             raise HTTPException(
                 status_code=400,
                 detail=f"Charter execution failed: {exc}",
             ) from exc
 
         elapsed = (time.perf_counter() - t0) * 1000.0
-        # Mean entanglement risk across ops for telemetry
         risks = [
             float(a.termination_risk_index)
             for a in st.system.roster
@@ -338,11 +333,11 @@ def create_app() -> FastAPI:
             analytics=result.get("analytics"),
             live_wire=bool(result.get("live_wire", True)),
             llm_provider=str(result.get("llm_provider") or "mock"),
-            entanglement_mean=round(sum(risks) / len(risks), 4) if risks else 0.0,
+            entanglement_mean=(
+                round(sum(risks) / len(risks), 4) if risks else 0.0
+            ),
             elapsed_ms=round(elapsed, 2),
         )
-
-    # ----- Roster ----------------------------------------------------------
 
     @app.get(
         "/roster/status",
@@ -377,10 +372,8 @@ def create_app() -> FastAPI:
             muscle_memory_records=len(system.muscle_db.storage),
             living_playbook_records=len(system.playbook.records),
             analytics=system.analytics.export(),
-            engine_version="1.3.1",
+            engine_version="1.4.0",
         )
-
-    # ----- System controls -------------------------------------------------
 
     @app.post(
         "/system/trigger-monday-sync",
@@ -396,7 +389,9 @@ def create_app() -> FastAPI:
             dossier_driven=bool(result.get("dossier_driven")),
             dossier=result.get("dossier"),
             lean_rehire=list(result.get("lean_rehire") or []),
-            active_ops_after_prune=int(result.get("active_ops_after_prune") or 0),
+            active_ops_after_prune=int(
+                result.get("active_ops_after_prune") or 0
+            ),
             ascension=bool(result.get("ascension")),
             analytics=result.get("analytics") or st.system.analytics.export(),
         )
@@ -409,7 +404,9 @@ def create_app() -> FastAPI:
     async def advance_analytics(
         run_eow_if_ready: bool = Query(
             True,
-            description="If workweek complete, run end-of-week audit + dossier sync",
+            description=(
+                "If workweek complete, run end-of-week audit + dossier sync"
+            ),
         ),
     ) -> AdvanceAnalyticsResponse:
         """Advance Analytics Chief by one day; optionally run 5-day audit."""
@@ -460,6 +457,62 @@ def create_app() -> FastAPI:
             analytics=eow.get("analytics") or st.system.analytics.export(),
         )
 
+    @app.post(
+        "/system/load-playbook",
+        response_model=LoadPlaybookResponse,
+        tags=["system"],
+    )
+    async def load_playbook(
+        file: UploadFile = File(..., description="Charterfile YAML"),
+    ) -> LoadPlaybookResponse:
+        """Upload Charterfile.yaml → compile → hydrate GM/roster/CFO."""
+        st = get_state()
+        raw = await file.read()
+        if not raw:
+            raise HTTPException(status_code=400, detail="Empty playbook file")
+        try:
+            meta = await asyncio.to_thread(
+                st.system.load_playbook, raw, source_path=file.filename or ""
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=400,
+                detail=f"Playbook compile failed: {exc}",
+            ) from exc
+        return LoadPlaybookResponse(
+            playbook_id=str(meta["playbook_id"]),
+            playbook_name=str(meta["playbook_name"]),
+            version=str(meta["version"]),
+            ops_roster=list(meta["ops_roster"]),
+            token_budget=int(meta["token_budget"]),
+            flow_path=list(meta["flow_path"]),
+            models=list(meta["models"]),
+            load_count=int(meta.get("load_count") or 0),
+        )
+
+    @app.post("/system/execute-compiled", tags=["workload"])
+    async def execute_compiled(body: WorkloadSubmitRequest) -> Dict[str, Any]:
+        """Execute the active compiled Charterfile against a workload."""
+        st = get_state()
+        if st.system.compiled_playbook is None:
+            raise HTTPException(
+                status_code=409,
+                detail="No playbook loaded — POST /system/load-playbook first",
+            )
+        try:
+            result = await asyncio.to_thread(
+                st.system.execute_compiled,
+                body.workload,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return result
+
+    @app.get("/system/playbook", tags=["system"])
+    async def get_playbook() -> Dict[str, Any]:
+        st = get_state()
+        return st.system.compiler.export()
+
     @app.post("/system/upgrade-personnel", tags=["system"])
     async def upgrade_personnel(body: PersonnelUpgradeRequest) -> Dict[str, Any]:
         """Cross-generational Living Playbook remap (e.g. 70B → 1T)."""
@@ -478,6 +531,7 @@ def create_app() -> FastAPI:
                 "model_class": st.system.playbook.model_class,
                 "iteration": st.system.playbook.evolution_iteration,
             },
+            "compiled_playbook": st.system.compiler.export(),
             "muscle_db": st.system.muscle_db.stats(),
             "requests": st.request_count,
             "uptime_s": round(st.uptime_s, 3),
@@ -486,12 +540,11 @@ def create_app() -> FastAPI:
     return app
 
 
-# Module-level app for `uvicorn flowchartcharter.api_server:app`
 app = create_app()
 
 
 def main() -> None:
-    """CLI entry: uvicorn on 0.0.0.0:8080 (or FCC_PORT)."""
+    """CLI entry: uvicorn on 0.0.0.0:8090 (or FCC_PORT)."""
     import uvicorn
 
     host = os.environ.get("FCC_HOST", "0.0.0.0")

@@ -19,6 +19,7 @@ from .muscle_memory import (
     seed_legacy_refactor,
 )
 from .production import ProductionMuscleMemory, LLMExecutionClient
+from .playbook_compiler import PlaybookCompiler, run_compiled_playbook
 import os
 from .quantum import (
     DEFAULT_PATHS,
@@ -133,6 +134,11 @@ class FlowChartCharterSystem:
         self.live_wire = os.environ.get("FCC_LIVE_WIRE", "1") != "0"
         self.llm_client = LLMExecutionClient()
         self.last_live_wire: Dict[str, Any] = {}
+        self.compiler = PlaybookCompiler()
+        self.compiled_playbook = None
+        self.active_playbook_id = None
+        self.playbook_routing: Dict[str, Any] = {}
+        self.playbook_flow_path: List[str] = []
         self.memory_store.add(
             MuscleMemoryRecord(
                 charter_id="seed-migration",
@@ -846,6 +852,38 @@ class FlowChartCharterSystem:
                 f["name"] for f in self.blueprint["foundations"]
             ],
         }
+
+    def load_playbook(self, source, **kwargs) -> Dict[str, Any]:
+        """Compile Charterfile YAML and hydrate GM / roster / CFO state."""
+        return self.compiler.compile_and_hydrate(self, source, **kwargs)
+
+    def execute_compiled(
+        self, workload_name: str, **kwargs
+    ) -> Dict[str, Any]:
+        """Run active compiled playbook units via Live-Wire + dynamic schemas."""
+        if self.compiled_playbook is None:
+            # fall back to standard charter
+            return self.execute_charter(workload_name, **kwargs)
+        result = run_compiled_playbook(self, workload_name)
+        # analytics ingest for ops agents
+        self.analytics.ingest_cycle(
+            agents=self.roster,
+            workload=workload_name,
+            quality=float(result.get("quality") or 0.0),
+            flow_path=result.get("flow_path") or [],
+        )
+        snap = {
+            **result,
+            "live_wire": self.live_wire,
+            "llm_provider": self.llm_client.bridge.config.provider,
+            "mode": "compiled_playbook",
+            "analytics": {
+                "days_ready": self.analytics.days_ready(),
+                "day_counter": self.analytics.day_counter,
+            },
+        }
+        self.checkpointer.append(snap)
+        return snap
 
     def ontology_export(self) -> Dict[str, Any]:
         return self.knowledge.export_dict()

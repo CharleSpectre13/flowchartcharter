@@ -117,6 +117,14 @@ from .living_playbook import (
 )
 from .llm_bridge import LLMBridge, LLMNodeOutput, LLMBridgeConfig
 from .simulation_sandbox import SimulationSandbox, run_phase2_sandbox
+from .playbook_compiler import (
+    PlaybookCompiler,
+    CompiledPlaybook,
+    compile_playbook,
+    generate_pydantic_model,
+    hydrate_system,
+    run_compiled_playbook,
+)
 from .production import (
     LLMExecutionClient,
     LLMExecutionRequest,
@@ -254,8 +262,15 @@ __all__ = [
     "WorkerNode",
     "SimulationSandbox",
     "run_phase2_sandbox",
+    "PlaybookCompiler",
+    "CompiledPlaybook",
+    "compile_playbook",
+    "generate_pydantic_model",
+    "hydrate_system",
+    "run_compiled_playbook",
 ]
 
 
 
-__version__ = "1.3.1"
+
+__version__ = "1.4.0"

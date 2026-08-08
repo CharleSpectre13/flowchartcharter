@@ -25,6 +25,7 @@ class Agent:
         self.capability_vector = capability_vector or {"general": 1.0}
         self.corporate_rank = 1.0
         self.load = 0.0
+        self.talent_eligible = True  # executives / pure validators opt out
 
     def execute_flow_unit(
         self,
@@ -65,6 +66,7 @@ class BossAgent(Agent):
         super().__init__(name, "General Manager (Boss)")
         self.corporate_rank = 10.0
         self.playbook: List[str] = []
+        self.talent_eligible = False
 
     def monday_morning_sync(
         self,
@@ -73,11 +75,15 @@ class BossAgent(Agent):
         benchmark: float = INDUSTRY_BENCHMARK,
         rng: Optional[random.Random] = None,
     ) -> Dict[str, str]:
-        """ST-07 Downtime Team Sync — talent management."""
+        """ST-07 Downtime Team Sync — talent management on operational roster only."""
         r = rng or random
         outcomes: Dict[str, str] = {}
         for agent in team:
             if isinstance(agent, BossAgent):
+                continue
+            if not getattr(agent, "talent_eligible", True):
+                continue
+            if not agent.history:
                 continue
             f = agent.calculate_fitness()
             if f >= benchmark * 1.2:

@@ -1,5 +1,16 @@
 # FlowChartCharter
 
+
+## 🎬 Launch Film (Fear Index)
+
+Open-source product launch film with full engine walkthrough (CFO budgets, Fear Metric, Muscle-Memory, Boss Audit):
+
+**[Download the launch film (MP4 + VO)](https://github.com/CharleSpectre13/flowchartcharter/releases/tag/v1.6.2-launch-film)**
+
+```bash
+pip install flowchart-charter-engine
+```
+
 ### The execution-first multi-agent paradigm — after GraphRAG
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)

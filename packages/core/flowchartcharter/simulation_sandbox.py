@@ -1,11 +1,7 @@
-"""Advanced simulation sandbox — Phase 2 Live Launch validation harness.
+"""Scenario sandbox — scripted multi-day enterprise validation.
 
-Runs scripted multi-day enterprise scenarios against the engine without
-requiring live LLM keys. Verifies:
-  - Live-Wire path (mock provider)
-  - Muscle-Memory / Living Playbook hits
-  - Analytics 5-day cadence → dossier-driven Monday Sync
-  - API Nervous System contracts (optional TestClient)
+This is NOT the ExecutionSandbox playpen (see execution_sandbox.py).
+Alias: ScenarioSandbox == SimulationSandbox (historical name).
 """
 
 from __future__ import annotations
@@ -203,6 +199,10 @@ def run_phase2_sandbox() -> Dict[str, Any]:
         "api": api,
         "passed": scenarios["passed"] and api["passed"],
     }
+
+
+# Historical name kept; ExecutionSandbox is the playpen.
+ScenarioSandbox = SimulationSandbox
 
 
 if __name__ == "__main__":

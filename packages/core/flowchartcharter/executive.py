@@ -1,7 +1,7 @@
 """CEO / CFO / Board — executive layer; CFO applies budget matrix before collapse."""
 
 from __future__ import annotations
-from typing import Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 from .agents import Agent
 from .quantum import DEFAULT_PATH_COSTS, PATH_LITE, apply_cfo_budget_matrix
 from .vectors import (
@@ -159,25 +159,38 @@ class RhythmValidatorAgent(Agent):
         remediation_loops: int = 0,
         schema_ok: bool = True,
         qs: Optional[float] = None,
+        result: Optional[Dict[str, Any]] = None,
+        implementor_role: str = "Key Player",
     ) -> RhythmAudit:
-        issues: List[str] = []
-        if quality < threshold:
-            issues.append(f"quality {quality:.3f} < {threshold}")
-        if not schema_ok:
-            issues.append("schema invalid")
-        if qs is not None and qs < 0.95:
-            issues.append(f"Q_s {qs:.3f} < 0.95 schema synergy")
-        if remediation_loops > 3:
-            issues.append("remediation cap exceeded")
-        passed = len(issues) == 0
-        return RhythmAudit(
-            marker=marker,
+        """Grade evidence. Handed ``quality`` is claimed and ignored."""
+        from .rhythm_gate import collect_evidence, independent_audit
+
+        if result is not None:
+            ev = collect_evidence(
+                result,
+                implementor_role=implementor_role,
+                auditor_role="Audit Manager",
+            )
+        else:
+            ev = collect_evidence(
+                {
+                    "ok": bool(schema_ok),
+                    "blocked": not bool(schema_ok),
+                    "gate": {"valid": bool(schema_ok), "quality": quality},
+                    "quality": quality,
+                    "dry_run": True,
+                },
+                implementor_role=implementor_role,
+                auditor_role="Audit Manager",
+            )
+        return independent_audit(
+            evidence=ev,
             charter_id=charter_id,
-            quality=quality,
             threshold=threshold,
-            passed=passed,
             remediation_loops=remediation_loops,
-            blocking_issues=tuple(issues),
+            implementor_role=implementor_role,
+            auditor_role="Audit Manager",
+            marker=marker,
         )
 
 

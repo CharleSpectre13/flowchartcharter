@@ -188,14 +188,24 @@ class StatePersister:
         }
 
     def save(self, system: Any) -> str:
-        """Atomically write system snapshot to disk. Returns path."""
+        """Atomically write scrubbed system snapshot to disk. Returns path.
+
+        v2.2.0 R1: SecretScrubber runs at write-time so tokens/webhooks never
+        land in system_state.json.
+        """
+        from .secret_vault import SecretScrubber
+
         with self._lock:
             try:
                 self.ensure_dir()
                 payload = self.dump_system(system)
+                # Tenant metadata if present
+                if hasattr(system, "tenant_id"):
+                    payload["tenant_id"] = getattr(system, "tenant_id", "default")
+                safe = SecretScrubber.scrub(payload)
                 tmp = self.path.with_suffix(self.path.suffix + ".tmp")
                 tmp.write_text(
-                    json.dumps(payload, indent=2, default=str),
+                    json.dumps(safe, indent=2, default=str),
                     encoding="utf-8",
                 )
                 tmp.replace(self.path)

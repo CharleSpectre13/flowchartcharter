@@ -35,6 +35,20 @@ from .executive import (
     ExecutiveBoard,
 )
 from .knowledge_graph import KnowledgeGraph, build_ontology
+from .live_model import LiveModel
+from .llm_bridge import detect_live_provider, LLMBridge, LLMBridgeConfig
+from .stranger_receipt import issue_receipt, verify_receipt, verify_chain
+from .charter_memory import (
+    TextUnit,
+    ProposedGraph,
+    VerifyVerdict,
+    MergeReceipt,
+    extract_triples,
+    verify_extraction,
+    ingest_text,
+    run_reindex_loop,
+    bind_episode,
+)
 from .foundations import (
     FOUNDATIONS,
     foundations_table,
@@ -116,8 +130,12 @@ from .living_playbook import (
     objective_signature_from_payload,
     capability_map_from_path,
 )
-from .llm_bridge import LLMBridge, LLMNodeOutput, LLMBridgeConfig
-from .simulation_sandbox import SimulationSandbox, run_phase2_sandbox
+from .llm_bridge import LLMBridge, LLMNodeOutput, LLMBridgeConfig, SamplingParams, ProviderUsage, resolve_provider_key
+from .simulation_sandbox import (
+    SimulationSandbox,
+    ScenarioSandbox,
+    run_phase2_sandbox,
+)
 from .observability import get_metrics_hub, MetricsHub
 from .state_persister import StatePersister, get_persister
 from .security import require_admin_key, ensure_admin_key_on_boot
@@ -147,6 +165,80 @@ from .analytics import (
     AgentTrend,
     CheatCodeExtraction,
     WORKWEEK_DAYS,
+)
+from .hybrid_router import HybridBossRouter, RouteLane, RouteDecision
+from .multi_hop_reasoner import (
+    MultiHopReasoner,
+    HopSchema,
+    MultiHopResultSchema,
+)
+from .synthesis_squad import (
+    LazyGlobalSynthesisSquad,
+    GlobalSynthesisReport,
+    CommunityMapResult,
+    SynthesisSquadMember,
+)
+from .swarm_manager import (
+    SwarmManager,
+    SwarmItemSchema,
+    SwarmItemResultSchema,
+    SwarmReportSchema,
+    TokenLedger,
+)
+
+from .secret_vault import SecretScrubber, StatePersisterVault, scrub_payload
+from .tenant import (
+    TenantNamespacedEngine,
+    TenantRegistry,
+    get_tenant_registry,
+    resolve_tenant_id,
+)
+from .rhythm_gate import (
+    RhythmViolationError,
+    ForceQualityForbidden,
+    EvidenceBundle,
+    build_rhythm_audit,
+    independent_audit,
+    earned_quality,
+    collect_evidence,
+    enforce_rhythm_or_raise,
+    marker_for_unit,
+)
+from .llm_providers import list_providers, run_golden_evals, DEFAULT_GOLDEN_TASKS
+from .live_golden import run_live_goldens
+from .retrieval_port import RetrievalPort, RetrievalResult, RetrievalHit
+from .harness import HarnessKernel, KillSwitch, KillSwitchError, ToolPort
+from .execution_sandbox import ExecutionSandbox, SandboxPolicy
+from .durable_notebook import DurableNotebook
+from .kill_law import bind as bind_kill_law
+from .kill_law import refuse_side_effect
+
+from .charter_synthesizer import (
+    CharterSynthesizer,
+    CharterDraft,
+    CharterDraftStatus,
+    SynthesizedCharterSchema,
+    audit_cfo_ceiling,
+    seed_synthesis_memories,
+    validate_synthesized_unit,
+)
+from .action_units import (
+    ActionUnit,
+    ActionUnit_SlackWebhook,
+    ActionUnit_GitHubPR,
+    ActionResult,
+    SlackWebhookPayload,
+    GitHubPRPayload,
+    create_action_unit,
+    redact_secrets,
+    security_audit_action_result,
+    ENTANGLEMENT_SCHEMA_PENALTY,
+)
+from .headhunter import (
+    HeadhunterProtocol,
+    TalentProfile,
+    SandboxTalentResult,
+    HeadhunterDecision,
 )
 
 __all__ = [
@@ -180,6 +272,19 @@ __all__ = [
     "RhythmValidatorAgent",
     "ExecutiveBoard",
     "KnowledgeGraph",
+    "TextUnit",
+    "ingest_text",
+    "run_reindex_loop",
+    "extract_triples",
+    "verify_extraction",
+    "bind_episode",
+    "LiveModel",
+    "detect_live_provider",
+    "run_system_audit",
+    "format_audit_report",
+    "issue_receipt",
+    "verify_receipt",
+    "verify_chain",
     "build_ontology",
     "FOUNDATIONS",
     "foundations_table",
@@ -254,6 +359,9 @@ __all__ = [
     "LLMBridge",
     "LLMNodeOutput",
     "LLMBridgeConfig",
+    "SamplingParams",
+    "ProviderUsage",
+    "resolve_provider_key",
     "LLMExecutionClient",
     "LLMExecutionRequest",
     "LLMExecutionResponse",
@@ -265,6 +373,16 @@ __all__ = [
     "WorkerTask",
     "WorkerNode",
     "SimulationSandbox",
+    "ScenarioSandbox",
+    "HarnessKernel",
+    "KillSwitch",
+    "KillSwitchError",
+    "ToolPort",
+    "ExecutionSandbox",
+    "SandboxPolicy",
+    "DurableNotebook",
+    "bind_kill_law",
+    "refuse_side_effect",
     "run_phase2_sandbox",
     "PlaybookCompiler",
     "CompiledPlaybook",
@@ -274,8 +392,72 @@ __all__ = [
     "run_compiled_playbook",
     "get_metrics_hub",
     "MetricsHub",
+    # v1.7 Hybrid Knowledge Expansion
+    "HybridBossRouter",
+    "RouteLane",
+    "RouteDecision",
+    "MultiHopReasoner",
+    "HopSchema",
+    "MultiHopResultSchema",
+    "LazyGlobalSynthesisSquad",
+    "GlobalSynthesisReport",
+    "CommunityMapResult",
+    "SynthesisSquadMember",
+    # v1.8 Autonomous Scaling Horizon
+    "SwarmManager",
+    "SwarmItemSchema",
+    "SwarmItemResultSchema",
+    "SwarmReportSchema",
+    "TokenLedger",
+    "HeadhunterProtocol",
+    "TalentProfile",
+    "SandboxTalentResult",
+    "HeadhunterDecision",
+    # v2.0 Hands of the Corporation
+    "ActionUnit",
+    "ActionUnit_SlackWebhook",
+    "ActionUnit_GitHubPR",
+    "ActionResult",
+    "SlackWebhookPayload",
+    "GitHubPRPayload",
+    "create_action_unit",
+    "redact_secrets",
+    "security_audit_action_result",
+    "ENTANGLEMENT_SCHEMA_PENALTY",
+    # v2.1 Coach Trust
+    "CharterSynthesizer",
+    "CharterDraft",
+    "CharterDraftStatus",
+    "SynthesizedCharterSchema",
+    "audit_cfo_ceiling",
+    "seed_synthesis_memories",
+    "validate_synthesized_unit",
+    # v2.2 Ironclad
+    "SecretScrubber",
+    "StatePersisterVault",
+    "scrub_payload",
+    "TenantNamespacedEngine",
+    "TenantRegistry",
+    "get_tenant_registry",
+    "resolve_tenant_id",
+    "RhythmViolationError",
+    "ForceQualityForbidden",
+    "EvidenceBundle",
+    "build_rhythm_audit",
+    "independent_audit",
+    "earned_quality",
+    "collect_evidence",
+    "enforce_rhythm_or_raise",
+    "marker_for_unit",
+    "list_providers",
+    "run_golden_evals",
+    "DEFAULT_GOLDEN_TASKS",
+    "run_live_goldens",
+    "RetrievalPort",
+    "RetrievalResult",
+    "RetrievalHit",
 ]
 
 
 _REEXPORT_FITNESS = (DEFAULT_ALPHA, DEFAULT_BETA, DEFAULT_GAMMA, DEFAULT_DELTA)
-__version__ = "1.6.1"
+__version__ = "3.3.0"

@@ -110,6 +110,13 @@ class CompiledFlowUnit:
     schema_raw: Dict[str, str]
     pydantic_model: Type[BaseModel]
     order: int = 0
+    # v2.0 Hands of the Corporation
+    unit_kind: str = "flow"  # flow | action | swarm
+    action_type: Optional[str] = None
+    action_config: Dict[str, Any] = field(default_factory=dict)
+    swarm: bool = False
+    swarm_max_workers: int = 8
+    swarm_source_field: str = "files"
 
     def validate_output(self, payload: Any) -> Tuple[bool, Optional[BaseModel], List[str]]:
         """Run dynamic Pydantic guardrail on LLM / worker output."""
@@ -139,6 +146,12 @@ class CompiledFlowUnit:
             "schema": dict(self.schema_raw),
             "model_name": self.pydantic_model.__name__,
             "order": self.order,
+            "unit_kind": self.unit_kind,
+            "action_type": self.action_type,
+            "action_config": dict(self.action_config),
+            "swarm": self.swarm,
+            "swarm_max_workers": self.swarm_max_workers,
+            "swarm_source_field": self.swarm_source_field,
         }
 
 
@@ -301,9 +314,68 @@ def compile_playbook(
         schema = item.get("schema") or {}
         if not isinstance(schema, dict):
             raise PlaybookCompileError(f"schema for {uid} must be a mapping")
+
+        # v2.0 — ActionUnit / Swarm recognition
+        action_type = item.get("action") or item.get("action_type") or item.get("action_unit")
+        unit_kind_raw = str(item.get("unit_kind") or item.get("type") or "").lower()
+        swarm_flag = bool(item.get("swarm") or unit_kind_raw == "swarm")
+        if action_type:
+            unit_kind = "action"
+        elif swarm_flag:
+            unit_kind = "swarm"
+        else:
+            unit_kind = "flow"
+
+        # Action units may use built-in payload schemas via empty/partial schema
+        if unit_kind == "action" and not schema:
+            # default action schemas for compiler model generation
+            at = str(action_type)
+            if "Slack" in at or "slack" in at:
+                schema = {
+                    "text": "string",
+                    "channel": "string",
+                    "username": "string",
+                }
+            elif "GitHub" in at or "github" in at or "PR" in at:
+                schema = {
+                    "owner": "string",
+                    "repo": "string",
+                    "title": "string",
+                    "body": "string",
+                    "head": "string",
+                    "base": "string",
+                    "diff": "string",
+                    "draft": "bool",
+                }
+            else:
+                schema = {"payload": "object"}
+
+        if unit_kind == "swarm" and not schema:
+            schema = {
+                "files": "list[string]",
+                "findings": "list[string]",
+                "scanned": "int",
+                "failed": "int",
+            }
+
         schema_str = {str(k): str(v) for k, v in schema.items()}
         model = generate_pydantic_model(uid, schema_str)
         models[uid] = model
+
+        action_config = item.get("action_config") or item.get("config") or {}
+        if not isinstance(action_config, dict):
+            action_config = {}
+
+        if unit_kind == "action" and action_type:
+            # Validate known ActionUnit types early
+            from .action_units import ACTION_REGISTRY
+
+            key = str(action_type)
+            if key not in ACTION_REGISTRY and key.lower() not in ACTION_REGISTRY:
+                raise PlaybookCompileError(
+                    f"Unknown ActionUnit type {action_type!r} on unit {uid}"
+                )
+
         units.append(
             CompiledFlowUnit(
                 id=uid,
@@ -314,6 +386,14 @@ def compile_playbook(
                 schema_raw=schema_str,
                 pydantic_model=model,
                 order=idx,
+                unit_kind=unit_kind,
+                action_type=str(action_type) if action_type else None,
+                action_config=dict(action_config),
+                swarm=swarm_flag or unit_kind == "swarm",
+                swarm_max_workers=int(
+                    item.get("swarm_max_workers") or item.get("max_workers") or 8
+                ),
+                swarm_source_field=str(item.get("swarm_source_field") or "files"),
             )
         )
 
@@ -667,6 +747,169 @@ def execute_playbook_unit_live(
         "latency_ms": resp.latency_ms,
         "generation": resp.generation,
         "ok": gate["valid"] and resp.ok,
+        "unit_kind": unit.unit_kind,
+    }
+
+
+def execute_playbook_swarm_unit(
+    system: Any,
+    agent: Agent,
+    unit: CompiledFlowUnit,
+    *,
+    workload: str,
+    prior_outputs: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """v1.8 SwarmManager step inside a compiled playbook."""
+    from .swarm_manager import SwarmManager
+
+    prior_outputs = prior_outputs or []
+    # Prefer files list from prior unit outputs
+    files: List[Any] = []
+    for prev in reversed(prior_outputs):
+        data = (prev.get("gate") or {}).get("data") or prev.get("data") or {}
+        if isinstance(data, dict) and data.get(unit.swarm_source_field):
+            files = list(data[unit.swarm_source_field])
+            break
+        if isinstance(data, dict) and data.get("files"):
+            files = list(data["files"])
+            break
+    if not files:
+        # Derive synthetic file list from workload tokens
+        files = [f"scan://{workload[:40]}/{i}.py" for i in range(12)]
+
+    swarm = SwarmManager(
+        cfo_ceiling=min(int(getattr(system, "token_budget", 5000)), 5000),
+        max_workers=unit.swarm_max_workers,
+        quiet=True,
+    )
+    report = swarm.run(files, max_workers=unit.swarm_max_workers)
+    # Record mild metrics on agent
+    agent.history.append(
+        ExecutionMetrics(
+            token_cost=report.tokens,
+            execution_time=max(0.001, report.wall_ms / 1000.0),
+            quality_score=report.quality,
+            synergy_score=0.9 if report.failed == 0 else 0.6,
+            expected_token_cost=unit.expected_tokens,
+            expected_time=unit.expected_latency_ms / 1000.0,
+        )
+    )
+    findings = [
+        f"issue:{r.item_id}" for r in report.results if not r.ok
+    ] or ["clean:no_critical"]
+    data = {
+        "files": [str(f) for f in files],
+        "findings": findings,
+        "scanned": report.succeeded,
+        "failed": report.failed,
+    }
+    return {
+        "unit_id": unit.id,
+        "agent": agent.name,
+        "role": unit.assigned_role,
+        "unit_kind": "swarm",
+        "ok": report.under_budget and report.succeeded > 0,
+        "swarm": report.model_dump(),
+        "data": data,
+        "gate": {"valid": True, "data": data, "entanglement_delta": report.failed},
+        "live_wire": False,
+        "mock": True,
+    }
+
+
+def execute_playbook_action_unit(
+    agent: Agent,
+    unit: CompiledFlowUnit,
+    *,
+    workload: str,
+    prior_outputs: Optional[List[Dict[str, Any]]] = None,
+    system: Any = None,
+) -> Dict[str, Any]:
+    """v2.0 ActionUnit step — schema gate then external side-effect."""
+    from .action_units import create_action_unit
+
+    prior_outputs = prior_outputs or []
+    if not unit.action_type:
+        return {
+            "unit_id": unit.id,
+            "ok": False,
+            "error": "missing action_type",
+            "unit_kind": "action",
+        }
+
+    harness = getattr(system, "harness", None) if system is not None else None
+    if harness is not None and not harness.kill.armed:
+        return {
+            "unit_id": unit.id,
+            "ok": False,
+            "blocked": True,
+            "halted": True,
+            "error": "kill_switch_halted",
+            "unit_kind": "action",
+            "action_type": unit.action_type,
+        }
+
+    action = create_action_unit(unit.action_type, unit_id=unit.id)
+    # Build payload from action_config + prior patch outputs
+    payload: Dict[str, Any] = dict(unit.action_config.get("payload") or {})
+    # Merge top-level action_config keys that look like payload fields
+    for k, v in unit.action_config.items():
+        if k in ("payload", "dry_run", "webhook_url", "token", "api_base"):
+            continue
+        payload.setdefault(k, v)
+
+    # GitHub PR: pull diff from prior patch unit if missing
+    if "GitHub" in unit.action_type or "github" in unit.action_type.lower():
+        if not payload.get("diff"):
+            for prev in reversed(prior_outputs):
+                data = (prev.get("gate") or {}).get("data") or prev.get("data") or {}
+                if isinstance(data, dict) and data.get("patch_diff"):
+                    payload["diff"] = data["patch_diff"]
+                    break
+                if isinstance(data, dict) and data.get("diff"):
+                    payload["diff"] = data["diff"]
+                    break
+        payload.setdefault("title", f"FCC auto-patch: {workload[:60]}")
+        payload.setdefault("body", f"Generated by FlowChartCharter playbook unit {unit.id}")
+        payload.setdefault("owner", unit.action_config.get("owner") or "acme-corp")
+        payload.setdefault("repo", unit.action_config.get("repo") or "secops-service")
+        payload.setdefault("head", unit.action_config.get("head") or "fcc/auto-patch")
+        payload.setdefault("base", unit.action_config.get("base") or "main")
+        if not payload.get("diff"):
+            payload["diff"] = (
+                "--- a/security/fix.py\n+++ b/security/fix.py\n"
+                "@@ -1,3 +1,5 @@\n+# patched by FlowChartCharter SecOps\n"
+                " def auth():\n-    return True\n+    return verify_bearer()\n"
+            )
+
+    if "Slack" in unit.action_type or "slack" in unit.action_type.lower():
+        if not payload.get("text"):
+            payload["text"] = f"FlowChartCharter: {unit.description} — {workload[:120]}"
+
+    cfg = {
+        k: v
+        for k, v in unit.action_config.items()
+        if k in ("dry_run", "webhook_url", "token", "api_base")
+    }
+    result = action.execute(payload, agent=agent, config=cfg)
+    telemetry = result.to_telemetry()
+    return {
+        "unit_id": unit.id,
+        "agent": agent.name,
+        "role": unit.assigned_role,
+        "unit_kind": "action",
+        "action_type": unit.action_type,
+        "ok": result.ok and not result.blocked,
+        "blocked": result.blocked,
+        "halted": (result.error or "") == "kill_switch_halted",
+        "action": telemetry,
+        "gate": {
+            "valid": not result.blocked,
+            "entanglement_delta": result.entanglement_delta,
+            "data": telemetry.get("redacted_request"),
+        },
+        "live_wire": not result.dry_run,
+        "mock": result.dry_run,
     }
 
 
@@ -675,11 +918,25 @@ def run_compiled_playbook(
     workload: str,
     *,
     playbook: Optional[CompiledPlaybook] = None,
+    hard_rhythm: bool = False,
 ) -> Dict[str, Any]:
-    """Execute all flow units in order using role-matched agents + Live-Wire."""
+    """Execute all flow units in order using role-matched agents + Live-Wire.
+
+    v2.2.0 R5: every unit emits a mandatory RhythmAudit (ST-04) before the
+    next unit advances. Maker-checker uses independent Audit Manager role.
+    """
+    from .rhythm_gate import (
+        attach_rhythm,
+        build_rhythm_audit,
+        enforce_rhythm_or_raise,
+    )
+
     pb: Optional[CompiledPlaybook] = playbook or getattr(system, "compiled_playbook", None)
     if pb is None:
         raise PlaybookCompileError("No compiled playbook loaded on system")
+
+    # Tenant budget charge if namespaced
+    tenant = getattr(system, "tenant", None)
 
     # role → agent
     role_map: Dict[str, Agent] = {}
@@ -692,7 +949,29 @@ def run_compiled_playbook(
                 role_map[req.role] = agent
 
     results: List[Dict[str, Any]] = []
+    rhythm_audits: List[Dict[str, Any]] = []
+    remediation = 0
+
     for unit in sorted(pb.flow_units, key=lambda u: u.order):
+        harness = getattr(system, "harness", None)
+        if harness is not None and not harness.kill.armed:
+            halted = {
+                "unit_id": unit.id,
+                "ok": False,
+                "halted": True,
+                "error": "kill_switch_halted",
+                "unit_kind": unit.unit_kind,
+            }
+            audit = build_rhythm_audit(
+                unit=unit,
+                result=halted,
+                charter_id=getattr(pb, "playbook_id", "") or pb.playbook_name,
+                remediation_loops=remediation,
+            )
+            halted = attach_rhythm(halted, audit)
+            results.append(halted)
+            rhythm_audits.append(audit.to_dict())
+            break
         agent = role_map.get(unit.assigned_role)
         if agent is None:
             # elastic phantom for missing role
@@ -710,24 +989,85 @@ def run_compiled_playbook(
                 None,
             )
         if agent is None:
-            results.append(
-                {
-                    "unit_id": unit.id,
-                    "ok": False,
-                    "error": "no agent available",
-                }
+            fail = {
+                "unit_id": unit.id,
+                "ok": False,
+                "error": "no agent available",
+            }
+            audit = build_rhythm_audit(
+                unit=unit,
+                result=fail,
+                charter_id=getattr(pb, "playbook_id", "") or pb.playbook_name,
+                remediation_loops=remediation,
             )
+            fail = attach_rhythm(fail, audit)
+            results.append(fail)
+            rhythm_audits.append(audit.to_dict())
             continue
         agent.refresh_survival_prompt()
-        results.append(
-            execute_playbook_unit_live(
+
+        if unit.unit_kind == "swarm" or unit.swarm:
+            unit_result = execute_playbook_swarm_unit(
+                system,
+                agent,
+                unit,
+                workload=workload,
+                prior_outputs=results,
+            )
+        elif unit.unit_kind == "action" and unit.action_type:
+            unit_result = execute_playbook_action_unit(
+                agent,
+                unit,
+                workload=workload,
+                prior_outputs=results,
+                system=system,
+            )
+        else:
+            unit_result = execute_playbook_unit_live(
                 agent,
                 pb,
                 unit,
                 workload=workload,
                 client=getattr(system, "llm_client", None),
             )
+
+        # ST-04 mandatory rhythm gate
+        if not unit_result.get("ok", False):
+            remediation += 1
+        audit = build_rhythm_audit(
+            unit=unit,
+            result=unit_result,
+            charter_id=getattr(pb, "playbook_id", "") or pb.playbook_name,
+            remediation_loops=remediation,
+            implementor_role=str(getattr(agent, "role", "") or unit.assigned_role),
+            auditor_role="Audit Manager",
         )
+        unit_result = attach_rhythm(unit_result, audit)
+        rhythm_audits.append(
+            enforce_rhythm_or_raise(
+                audit,
+                max_remediation=3,
+                hard_stop=hard_rhythm,
+            )
+        )
+        results.append(unit_result)
+
+        # Tenant charge
+        if tenant is not None:
+            tok = 0
+            if agent.history:
+                tok = int(getattr(agent.history[-1], "token_cost", 0) or 0)
+            if tok and hasattr(tenant, "charge_budget"):
+                if not tenant.charge_budget(tok):
+                    results.append(
+                        {
+                            "unit_id": f"{unit.id}_tenant_halt",
+                            "ok": False,
+                            "error": "tenant_cfo_ceiling",
+                            "tenant_id": getattr(tenant, "tenant_id", ""),
+                        }
+                    )
+                    break
 
     spend = sum(
         (a.history[-1].token_cost if a.history else 0)
@@ -740,19 +1080,58 @@ def run_compiled_playbook(
         for a in system.roster
         if not isinstance(a, BossAgent) and a.history
     ]
+    # Blend action quality from results when present
+    action_q = [
+        float((r.get("action") or {}).get("quality") or 0.0)
+        for r in results
+        if r.get("unit_kind") == "action" and r.get("action")
+    ]
     quality = sum(agent_q) / len(agent_q) if agent_q else 0.0
+    if action_q:
+        quality = (quality + sum(action_q) / len(action_q)) / 2.0
     all_ok = all(r.get("ok") for r in results) if results else False
+    rhythm_pass = all(a.get("passed") for a in rhythm_audits) if rhythm_audits else False
 
-    return {
+    # Observability counters
+    try:
+        from .observability import get_metrics_hub
+
+        hub = get_metrics_hub()
+        if hasattr(hub, "observe_rhythm"):
+            hub.observe_rhythm(rhythm_audits)
+        if hasattr(hub, "observe_actions"):
+            hub.observe_actions(results)
+    except Exception:  # noqa: BLE001
+        pass
+
+    out = {
         "playbook_id": pb.playbook_id,
         "playbook_name": pb.playbook_name,
         "workload": workload,
         "flow_path": pb.flow_path,
         "unit_results": results,
+        "rhythm_audits": rhythm_audits,
+        "rhythm_all_passed": rhythm_pass,
         "quality": quality,
-        "trust": all_ok and quality >= 0.90,
+        "trust": all_ok and quality >= 0.90 and rhythm_pass,
         "token_spend": system.token_spend,
         "token_budget": system.token_budget,
         "units_ok": sum(1 for r in results if r.get("ok")),
         "units_total": len(results),
+        "tenant_id": getattr(system, "tenant_id", "default"),
+        "version": "2.2.0",
     }
+    try:
+        from .charter_memory import bind_episode
+
+        if getattr(system, "knowledge", None) is not None:
+            out["episode"] = bind_episode(
+                system.knowledge,
+                goal=str(workload or pb.playbook_name),
+                path=list(pb.flow_path or []),
+                quality=float(quality),
+                trust=bool(out["trust"]),
+            )
+    except Exception:  # noqa: BLE001
+        out["episode"] = None
+    return out

@@ -33,7 +33,7 @@ from typing import (
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from .llm_bridge import LLMBridge, LLMBridgeConfig, LLMNodeOutput
+from .llm_bridge import LLMBridge, LLMBridgeConfig, LLMNodeOutput, SamplingParams
 from .muscle_memory import (
     ExecutionMemoryRecord,
     cosine_similarity,
@@ -187,6 +187,10 @@ class LLMExecutionResponse:
     entanglement_errors_delta: int
     provider: str
     mock: bool
+    billed_tokens: int = 0
+    usage: Dict[str, Any] = field(default_factory=dict)
+    sampling: Dict[str, Any] = field(default_factory=dict)
+    request_meta: Dict[str, Any] = field(default_factory=dict)
 
 
 class LLMExecutionClient:
@@ -235,48 +239,67 @@ class LLMExecutionClient:
         )
 
     def execute(self, req: LLMExecutionRequest) -> LLMExecutionResponse:
-        """Synchronous production call (safe inside thread pool)."""
+        """Synchronous production call (safe inside thread pool).
+
+        TPC sampling is applied on the wire. CFO bills provider usage,
+        never the model's self-reported tokens field.
+        """
         t0 = time.perf_counter()
         gen = self.generation_for_risk(req.termination_risk_index)
         system = self.build_system_prompt(req)
-        # Temporarily override bridge max_tokens from TPC
+        sampling = SamplingParams(
+            temperature=float(gen.temperature),
+            top_p=float(gen.top_p),
+            max_tokens=int(gen.max_tokens),
+            frequency_penalty=float(gen.frequency_penalty),
+            presence_penalty=float(gen.presence_penalty),
+        )
         old_max = self.bridge.config.max_tokens
         self.bridge.config.max_tokens = int(gen.max_tokens)
 
         try:
             if not self.bridge.live:
-                # mock path still goes through schema validation
                 raw_node = self.bridge.execute_worker(
                     system_prompt=system,
                     workload=req.workload,
                     path=req.path,
                     termination_risk_index=req.termination_risk_index,
+                    sampling=sampling,
                 )
+                billed = self.bridge.last_usage.billed or int(raw_node.tokens)
                 raw: Any = {
                     "result": raw_node.result,
                     "quality": raw_node.quality,
                     "path": raw_node.path,
-                    "tokens": raw_node.tokens,
+                    "tokens": billed,
                     "notes": raw_node.notes,
                     "schema_ok": raw_node.schema_ok,
                     "output_payload": {"mock": True},
                 }
                 mock = True
             else:
-                # live: use bridge chat with TPC system prompt
                 user_msg = (
                     f"Workload: {req.workload}\nSelected path: {req.path}\n"
                     f"termination_risk_index={req.termination_risk_index:.4f}"
                 )
-                raw_text = self.bridge._chat(system, user_msg)  # noqa: SLF001
-                raw = raw_text
+                chat = self.bridge.chat(system, user_msg, sampling=sampling)
+                raw = chat.text
                 mock = False
+                billed = chat.usage.billed
         finally:
             self.bridge.config.max_tokens = old_max
 
         model, report = validate_llm_output(
             raw, expected_output_keys=list(req.expected_output_keys) or None
         )
+        usage = self.bridge.last_usage.to_dict()
+        billed_tokens = int(self.bridge.last_usage.billed or billed or 0)
+        if billed_tokens <= 0 and model is not None:
+            billed_tokens = int(model.tokens)
+            if usage.get("source") in (None, "none"):
+                usage["source"] = "estimate"
+        if model is not None and billed_tokens > 0:
+            model.tokens = billed_tokens
         latency = (time.perf_counter() - t0) * 1000.0
         return LLMExecutionResponse(
             ok=report.valid and model is not None,
@@ -288,6 +311,10 @@ class LLMExecutionClient:
             entanglement_errors_delta=report.entanglement_increment,
             provider=self.bridge.config.provider,
             mock=mock,
+            billed_tokens=billed_tokens,
+            usage=usage,
+            sampling=dict(self.bridge.last_sampling or sampling.to_dict()),
+            request_meta=dict(self.bridge.last_request_meta),
         )
 
 
@@ -842,18 +869,20 @@ def apply_execution_to_agent(agent: Any, result: WorkerTaskResult) -> None:
     if resp.output is not None:
         from .metrics import ExecutionMetrics
 
+        spend = int(getattr(resp, "billed_tokens", 0) or resp.output.tokens)
+        ceiling = int((resp.generation or {}).get("max_tokens") or spend or 1)
         m = ExecutionMetrics(
-            token_cost=resp.output.tokens,
+            token_cost=spend,
             execution_time=max(0.001, resp.latency_ms / 1000.0),
             quality_score=resp.output.quality if resp.ok else min(resp.output.quality, 0.5),
             synergy_score=1.0 if resp.ok else 0.5,
-            expected_token_cost=resp.output.tokens,
+            expected_token_cost=ceiling,
             expected_time=max(0.001, resp.latency_ms / 1000.0),
         )
         agent.history.append(m)
         agent.record_cycle(
             schema_divergence=0 if resp.ok else 1,
-            token_spend=resp.output.tokens,
+            token_spend=spend,
             token_ceiling=max(resp.output.tokens, 1),
             delta_t=m.execution_time,
             structural_drift=0.0 if resp.ok else 0.4,

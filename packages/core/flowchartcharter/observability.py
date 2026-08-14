@@ -113,6 +113,48 @@ class MetricsHub:
             buckets=(0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 2.5, 5.0),
             registry=self.registry,
         )
+        # v2.2.0 R7 SLOs
+        self.action_blocked = Counter(
+            "fcc_action_blocked_total",
+            "ActionUnit schema blocks (Fear path)",
+            ["unit_type"],
+            registry=self.registry,
+        )
+        self.action_ok = Counter(
+            "fcc_action_ok_total",
+            "ActionUnit successful executions",
+            ["unit_type"],
+            registry=self.registry,
+        )
+        self.rhythm_pass = Counter(
+            "fcc_rhythm_pass_total",
+            "RhythmAudit passed gates",
+            ["marker"],
+            registry=self.registry,
+        )
+        self.rhythm_fail = Counter(
+            "fcc_rhythm_fail_total",
+            "RhythmAudit failed gates",
+            ["marker"],
+            registry=self.registry,
+        )
+        self.pending_charters = Gauge(
+            "fcc_pending_charters",
+            "Charter drafts awaiting coach approval",
+            registry=self.registry,
+        )
+        self.tenant_token_spent = Gauge(
+            "fcc_tenant_token_spent",
+            "Per-tenant token spend",
+            ["tenant_id"],
+            registry=self.registry,
+        )
+        self.tenant_cfo_ceiling = Gauge(
+            "fcc_tenant_cfo_ceiling",
+            "Per-tenant CFO ceiling",
+            ["tenant_id"],
+            registry=self.registry,
+        )
         # track last known counter levels to emit deltas safely
         self._entangle_seen: Dict[str, int] = {}
         self._token_seen: Dict[str, int] = {}
@@ -183,6 +225,23 @@ class MetricsHub:
                 self.muscle_misses.inc(misses - self._mm_misses)
                 self._mm_misses = misses
 
+        # v2.2 pending charters + tenant gauges
+        synth = getattr(system, "synthesizer", None)
+        if synth is not None and hasattr(synth, "list_pending"):
+            try:
+                self.pending_charters.set(float(len(synth.list_pending())))
+            except Exception:  # noqa: BLE001
+                pass
+        tenant = getattr(system, "tenant", None)
+        if tenant is not None:
+            tid = str(getattr(tenant, "tenant_id", "default"))
+            self.tenant_token_spent.labels(tenant_id=tid).set(
+                float(getattr(tenant, "token_spent", 0) or 0)
+            )
+            self.tenant_cfo_ceiling.labels(tenant_id=tid).set(
+                float(getattr(tenant, "cfo_ceiling", 0) or 0)
+            )
+
         self._last_sync = time.time()
 
     def observe_workload(
@@ -205,6 +264,34 @@ class MetricsHub:
             self._token_seen[playbook_id] = prev + token_delta
         if latency_s > 0:
             self.request_latency.labels(endpoint=endpoint).observe(latency_s)
+
+    def observe_rhythm(self, audits: list) -> None:
+        """Increment rhythm pass/fail counters from audit dicts."""
+        if not self.enabled:
+            return
+        for a in audits or []:
+            if not isinstance(a, dict):
+                continue
+            marker = str(a.get("marker") or "gate")
+            if a.get("passed"):
+                self.rhythm_pass.labels(marker=marker).inc()
+            else:
+                self.rhythm_fail.labels(marker=marker).inc()
+
+    def observe_actions(self, unit_results: list) -> None:
+        """Increment action blocked/ok from playbook unit results."""
+        if not self.enabled:
+            return
+        for r in unit_results or []:
+            if not isinstance(r, dict):
+                continue
+            if r.get("unit_kind") != "action":
+                continue
+            ut = str(r.get("action_type") or "ActionUnit")
+            if r.get("blocked"):
+                self.action_blocked.labels(unit_type=ut).inc()
+            elif r.get("ok"):
+                self.action_ok.labels(unit_type=ut).inc()
 
     def export(self) -> bytes:
         """Serialize metrics — pure memory, never blocks on engine work."""

@@ -86,6 +86,11 @@ class FlowChartCharterSystem:
         seed_living_playbook(self.playbook)
         self.elastic = ElasticRequisitionBoard()
         self.analytics = AnalyticsChief()
+        from .harness import HarnessKernel
+
+        persist = os.environ.get("FCC_HARNESS_PERSIST", "1") != "0"
+        self.harness = HarnessKernel(persist=persist)
+        self.harness.retrieval.kg = self.knowledge
         self.roster: List[Agent] = [
             Agent(
                 "Worker-1",
@@ -150,6 +155,24 @@ class FlowChartCharterSystem:
         self.playbook_routing: Dict[str, Any] = {}
         self.playbook_flow_path: List[str] = []
         self.persister = get_persister()
+        # v2.1 Coach Trust Hand-Off
+        from .charter_synthesizer import CharterSynthesizer, seed_synthesis_memories
+
+        seed_synthesis_memories(self.muscle_db)  # type: ignore[arg-type]
+        self.synthesizer = CharterSynthesizer(
+            muscle_db=self.muscle_db,  # type: ignore[arg-type]
+            coach_ceiling=min(12_000, int(self.token_budget)),
+            llm_client=getattr(self, "llm_client", None),
+        )
+        self.last_draft_id: Optional[str] = None
+        # v2.2.0 Multi-tenant namespace
+        from .tenant import get_tenant_registry, resolve_tenant_id
+
+        self.tenant_id = resolve_tenant_id(os.environ.get("FCC_TENANT_ID"))
+        self.tenant = get_tenant_registry().get_or_create(
+            self.tenant_id,
+            cfo_ceiling=min(12_000, int(self.token_budget)),
+        )
         self.memory_store.add(
             MuscleMemoryRecord(
                 charter_id="seed-migration",
@@ -170,6 +193,31 @@ class FlowChartCharterSystem:
                 tags=("cleansing", "high-entropy"),
             )
         )
+
+    def ingest_memory(
+        self,
+        text: str,
+        *,
+        source_id: str = "",
+    ) -> Dict[str, Any]:
+        """Delta-ingest a TextUnit into Brain 1. No GraphRAG claim."""
+        from .charter_memory import ingest_text
+
+        return ingest_text(self.knowledge, text, source_id=source_id)
+
+    def audit_live(self) -> Dict[str, Any]:
+        """Harness toolbox: live continuous-team-audit-loop probe."""
+        return self.harness.audit(self)
+
+    def issue_stranger_receipt(self, *, prev_hash: str = "") -> Dict[str, Any]:
+        from .stranger_receipt import issue_receipt
+
+        prev = prev_hash or str(
+            (getattr(self, "last_receipt", None) or {}).get("hash") or ""
+        )
+        rec = issue_receipt(self, prev_hash=prev)
+        self.last_receipt = rec
+        return rec
 
     def roster_capability_map(self) -> Dict[str, float]:
         caps: Dict[str, float] = {}
@@ -260,6 +308,35 @@ class FlowChartCharterSystem:
             return "path_B"
         return "path_A"
 
+    def _halted_charter_snap(self, workload_name: str) -> Dict[str, Any]:
+        reason = self.harness.kill.reason or "halted"
+        snap = {
+            "workload": workload_name,
+            "ok": False,
+            "halted": True,
+            "kill_state": "HALTED",
+            "reason": reason,
+            "quality": 0.0,
+            "trust": False,
+            "remediation_loops": 0,
+            "token_spend": self.token_spend,
+            "metrics_count": 0,
+            "rhythm_audit": {
+                "type": "RhythmAudit",
+                "marker": "gate",
+                "charter_id": workload_name,
+                "quality": 0.0,
+                "threshold": 0.90,
+                "passed": False,
+                "remediation_loops": 0,
+                "blocking_issues": ["kill_switch_halted"],
+            },
+            "budget_halt": False,
+            "live_wire": False,
+        }
+        self.checkpointer.append(snap)
+        return snap
+
     def execute_charter(
         self,
         workload_name: str,
@@ -271,6 +348,17 @@ class FlowChartCharterSystem:
         force_zero_shot: bool = False,
     ) -> Dict[str, Any]:
         """ST-01..ST-06 + Living Playbook ascension + Muscle-Memory."""
+        if force_quality is not None and os.environ.get(
+            "FCC_ALLOW_FORCE_QUALITY", "0"
+        ) != "1":
+            from .rhythm_gate import ForceQualityForbidden
+
+            raise ForceQualityForbidden(
+                "earned rhythm: force_quality is banned"
+            )
+        if not self.harness.kill.armed:
+            return self._halted_charter_snap(workload_name)
+
         self.router.history.clear()
         self.router._pending.clear()
 
@@ -362,6 +450,8 @@ class FlowChartCharterSystem:
         remaining = float(self.token_budget - self.token_spend)
 
         for agent in self.roster:
+            if not self.harness.kill.armed:
+                return self._halted_charter_snap(workload_name)
             if not self._is_ops(agent):
                 continue
 
@@ -504,23 +594,39 @@ class FlowChartCharterSystem:
             }
             survival_snaps.append(agent.survival_snapshot())
 
-        quality = force_quality if force_quality is not None else self._audit_quality(collected)
         mean_qs = (
             sum(float(s["Q_s"]) for s in schema_results) / len(schema_results)
             if schema_results
             else 1.0
         )
-        schema_ok = all(s.get("passed", True) for s in schema_results) if schema_results else True
-
-        audit = self.executives.validator.audit(
-            workload_name,
-            marker="gate",
-            quality=quality,
-            threshold=0.90,
-            remediation_loops=0,
-            schema_ok=schema_ok,
-            qs=mean_qs,
+        schema_ok = (
+            all(s.get("passed", True) for s in schema_results)
+            if schema_results
+            else True
         )
+        claimed = (
+            force_quality if force_quality is not None
+            else self._audit_quality(collected)
+        )
+        ev_payload = {
+            "ok": bool(schema_ok),
+            "blocked": not bool(schema_ok),
+            "gate": {"valid": bool(schema_ok), "quality": claimed},
+            "quality": claimed,
+            "dry_run": True,
+            "budget_halt": bool(getattr(self, "token_spend", 0) > self.token_budget),
+        }
+        from .rhythm_gate import independent_audit
+
+        audit = independent_audit(
+            result=ev_payload,
+            charter_id=workload_name,
+            threshold=0.90,
+            implementor_role="Key Player",
+            auditor_role="Audit Manager",
+            marker="gate",
+        )
+        quality = audit.quality
         self.blackboard.post_vector(audit)
         charter.state.quality_score = quality
 
@@ -678,7 +784,26 @@ class FlowChartCharterSystem:
             "foundations_ref": (
                 "charter|living_playbook|ascension|muscle_memory|" "fear_survival|elastic_phantom"
             ),
+            "kill_state": self.harness.kill.state.value,
+            "halted": False,
         }
+        q = ""
+        if isinstance(payload, dict):
+            q = str(payload.get("query") or payload.get("retrieve") or "")
+        if q:
+            hit = self.harness.retrieve(
+                q, mode=str(payload.get("mode") or "simple")
+            )
+            snap["retrieval"] = hit.to_dict()
+        from .charter_memory import bind_episode
+
+        snap["episode"] = bind_episode(
+            self.knowledge,
+            goal=workload_name,
+            path=flow_path_used,
+            quality=float(quality),
+            trust=bool(gov.approve_hand_off),
+        )
         # Analytics Chief — immutable cycle handoff (async ledger)
         self.analytics.ingest_cycle(
             agents=self.roster,
@@ -699,6 +824,7 @@ class FlowChartCharterSystem:
         charter.bump()
         try:
             self.persist_state()
+            self.persist_brain()
         except Exception:
             pass
         return snap
@@ -749,6 +875,7 @@ class FlowChartCharterSystem:
         skill_result = self.skills.TriggerMondayMorningSync(tel, roster=self.roster, boss=None)
         skill_result["outcomes"] = outcomes
         skill_result["phantom_outcomes"] = phantom_outcomes
+        skill_result["headhunter"] = list(self.boss.headhunter_log[-10:])
         # Ascension tick: evolution iteration advances on sync
         if self.playbook.horizon_reached:
             self.playbook.evolution_iteration += 1
@@ -823,6 +950,19 @@ class FlowChartCharterSystem:
         """Serialize engine state to disk (post-workload / post-sync)."""
         return self.persister.save(self)
 
+    def persist_brain(self) -> str:
+        """Delta KG + stranger receipt when persist is on."""
+        from .kill_law import persist_dir, persist_enabled
+        from .stranger_receipt import issue_receipt, persist_receipt
+
+        if not persist_enabled():
+            return ""
+        dest = persist_dir() / "kg_delta.json"
+        self.knowledge.save_delta(dest)
+        rec = issue_receipt(self)
+        persist_receipt(rec)
+        return str(dest)
+
     def restore_state(self) -> dict:
         """Re-hydrate from FCC_STATE_PATH if present."""
         return self.persister.restore(self)
@@ -831,11 +971,103 @@ class FlowChartCharterSystem:
         """Compile Charterfile YAML and hydrate GM / roster / CFO state."""
         return self.compiler.compile_and_hydrate(self, source, **kwargs)
 
+    def synthesize_charter(
+        self,
+        goal: str,
+        *,
+        coach_ceiling: Optional[int] = None,
+        playbook_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """v2.1 — Boss drafts YAML from Muscle-Memory; pending coach approval."""
+        ceiling = int(coach_ceiling or min(self.token_budget, self.synthesizer.coach_ceiling))
+        draft = self.synthesizer.synthesize(
+            goal,
+            coach_ceiling=ceiling,
+            playbook_name=playbook_name,
+        )
+        public = draft.to_public()
+        self.boss.register_pending_charter(public)
+        self.last_draft_id = draft.draft_id
+        self.checkpointer.append(
+            {
+                "event": "charter_synthesize",
+                "draft_id": draft.draft_id,
+                "status": draft.status.value,
+                "cfo_audit": draft.cfo_audit.model_dump(),
+            }
+        )
+        return {
+            "version": "2.2.0",
+            "draft_id": draft.draft_id,
+            "status": draft.status.value,
+            "yaml_text": draft.yaml_text,
+            "draft": public,
+            "cfo_audit": draft.cfo_audit.model_dump(),
+            "message": (
+                "Charter held in PENDING_COACH_APPROVAL — "
+                "POST /system/approve-charter to execute"
+            ),
+        }
+
+    def approve_charter(
+        self,
+        draft_id: str,
+        *,
+        approved_by: str = "Head Coach",
+        execute_workload: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """v2.1 — 1-click coach approval; optional immediate compiled execute."""
+        result = self.synthesizer.approve(
+            draft_id,
+            approved_by=approved_by,
+            auto_load=True,
+            system=self,
+        )
+        self.boss.clear_pending_charter(draft_id)
+        exec_result = None
+        if execute_workload:
+            exec_result = self.execute_compiled(execute_workload)
+            self.synthesizer.mark_executed(draft_id, exec_result)
+        snap = {
+            "version": "2.2.0",
+            **result,
+            "execution": exec_result,
+        }
+        self.checkpointer.append(
+            {"event": "charter_approve", "draft_id": draft_id, "by": approved_by}
+        )
+        try:
+            self.persist_state()
+        except Exception:
+            pass
+        return snap
+
+    def reject_charter(
+        self, draft_id: str, *, reason: str = "coach_rejected"
+    ) -> Dict[str, Any]:
+        result = self.synthesizer.reject(draft_id, reason=reason, system=self)
+        self.checkpointer.append(
+            {"event": "charter_reject", "draft_id": draft_id, "reason": reason}
+        )
+        return {"version": "2.2.0", **result}
+
+    def list_pending_charters(self) -> Dict[str, Any]:
+        pending = [d.to_public() for d in self.synthesizer.list_pending()]
+        return {
+            "version": "2.2.0",
+            "pending": pending,
+            "count": len(pending),
+            "boss_pending": self.boss.pending_charter_ids(),
+            "stats": self.synthesizer.stats(),
+        }
+
     def execute_compiled(self, workload_name: str, **kwargs) -> Dict[str, Any]:
         """Run active compiled playbook units via Live-Wire + dynamic schemas."""
         if self.compiled_playbook is None:
             # fall back to standard charter
             return self.execute_charter(workload_name, **kwargs)
+        if not self.harness.kill.armed:
+            return self._halted_charter_snap(workload_name)
         result = run_compiled_playbook(self, workload_name)
         # analytics ingest for ops agents
         self.analytics.ingest_cycle(
@@ -901,5 +1133,96 @@ class FlowChartCharterSystem:
             "phantom_outcomes": phantom_outcomes,
             "analytics": self.analytics.export(),
             "lean_rehire": self.boss.rehire_export(),
+            "headhunter": list(self.boss.headhunter_log[-10:]),
             "dossier_driven": dossier is not None,
+        }
+
+    # ------------------------------------------------------------------ v1.8
+    def run_swarm(
+        self,
+        dataset: Sequence[Any],
+        *,
+        max_workers: Optional[int] = None,
+        cfo_ceiling: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """SwarmManager fan-out — persist once after completion (no races)."""
+        report = self.boss.run_swarm(
+            dataset,
+            max_workers=max_workers,
+            cfo_ceiling=cfo_ceiling or self.token_budget,
+        )
+        try:
+            self.persist_state()
+        except Exception:
+            pass
+        return report
+
+    async def run_swarm_async(
+        self,
+        dataset: Sequence[Any],
+        *,
+        max_workers: Optional[int] = None,
+        cfo_ceiling: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        report = await self.boss.run_swarm_async(
+            dataset,
+            max_workers=max_workers,
+            cfo_ceiling=cfo_ceiling or self.token_budget,
+        )
+        try:
+            self.persist_state()
+        except Exception:
+            pass
+        return report
+
+    def requisition_new_talent(
+        self,
+        *,
+        fired_name: Optional[str] = None,
+        force: bool = True,
+        force_capability: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Manual Headhunter trigger (admin) — sandbox then roster."""
+        fired: Optional[Agent] = None
+        if fired_name:
+            for a in self.roster:
+                if a.name == fired_name or a.id == fired_name:
+                    fired = a
+                    break
+        if fired is None:
+            # synthetic template agent for forced capability hire
+            fired = Agent(
+                "Vacancy",
+                force_capability or "general Specialist",
+                {force_capability or "general": 1.0},
+            )
+            fired.status = AgentStatus.FIRED
+        muscle = self.muscle_db if isinstance(self.muscle_db, MuscleMemoryVectorDB) else None
+        # ProductionMuscleMemory still has .storage
+        if muscle is None and hasattr(self.muscle_db, "storage"):
+            muscle = self.muscle_db  # type: ignore[assignment]
+        decision = self.boss.requisition_new_talent(
+            fired=fired,
+            roster=self.roster,
+            muscle=muscle,  # type: ignore[arg-type]
+            force=force,
+            force_capability=force_capability,
+        )
+        try:
+            self.persist_state()
+        except Exception:
+            pass
+        return decision
+
+    def v18_stats(self) -> Dict[str, Any]:
+        return {
+            **self.boss.v18_stats(),
+            "roster_size": len(self.roster),
+            "active_ops": sum(
+                1
+                for a in self.roster
+                if not isinstance(a, BossAgent)
+                and a.status
+                in (AgentStatus.ACTIVE, AgentStatus.PROMOTED, AgentStatus.PHANTOM)
+            ),
         }

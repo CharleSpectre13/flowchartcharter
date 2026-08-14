@@ -15,24 +15,26 @@ pip install flowchart-charter-engine
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![PyPI](https://img.shields.io/badge/pip-flowchart--charter--engine-green.svg)](https://pypi.org/project/flowchart-charter-engine/)
-[![Version](https://img.shields.io/badge/core-v1.6.0-informational.svg)](packages/core)
+[![Version](https://img.shields.io/badge/core-v3.3.0-informational.svg)](packages/core)
 [![CI](https://img.shields.io/badge/CI-Continuous%20Audit%20Loop-purple.svg)](.github/workflows/audit.yml)
 
 > **Two lines to instantiate a Boss Agent. One YAML file to charter an enterprise.**
 
 ```bash
-pip install flowchart-charter-engine
-fcc version
-fcc --local run library/secops_vulnerability_audit.yaml
-fcc monitor   # Rich live dashboard
+pip install "git+https://github.com/CharleSpectre13/flowchartcharter.git"
+# or: pip install flowchart-charter-engine
+export XAI_API_KEY=...          # optional — auto-selects grok-4.5
+fcc-audit                       # live harness probes
 ```
 
 ```python
-from flowchartcharter import FlowChartCharterSystem
+from flowchartcharter import FlowChartCharterSystem, LiveModel
 
 system = FlowChartCharterSystem()
-result = system.execute_charter("Legacy Code Refactor")
-print(result["quality"], result["trust"], result["playbook_mode"])
+print(system.execute_charter("Legacy Code Refactor")["quality"])
+
+brain = LiveModel.from_env()
+print(brain.status())           # live True only when a real key is present
 ```
 
 ---

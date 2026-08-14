@@ -26,7 +26,7 @@ def load_latest_report() -> dict:
 def main() -> int:
     report = load_latest_report()
     system = FlowChartCharterSystem(seed=7)
-    results = [system.execute_charter(f"learn-cycle-{i}", force_quality=0.92) for i in range(2)]
+    results = [system.execute_charter(f"learn-cycle-{i}") for i in range(2)]
     sync = system.downtime_sync()
     receipt = {
         "ts": datetime.now(timezone.utc).isoformat(),

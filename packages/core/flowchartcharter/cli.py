@@ -1,44 +1,30 @@
 """CLI helpers — package entrypoints.
 
-- fcc-audit  → audit_main (pep8/pyflakes/compileall)
+- fcc-audit  → audit_main (live probes)
 - fcc        → flowchartcharter.fcc_cli:run
 """
 from __future__ import annotations
 
-import subprocess
-import sys
-from pathlib import Path
+import os
 
 
 def audit_main() -> None:
-    """Run pep8 + pyflakes + compileall against the installed package."""
+    """pep8 + live system probes. Maker ≠ checker."""
+    os.environ.setdefault("FCC_HARNESS_PERSIST", "0")
     try:
-        import flowchartcharter
+        from .system_audit import format_audit_report, run_system_audit
+        from .system import FlowChartCharterSystem
+        from .live_model import LiveModel
 
-        root = Path(flowchartcharter.__file__).resolve().parent
-    except ImportError:
-        root = Path(__file__).resolve().parent
-
-    targets = sorted(str(p) for p in root.glob("*.py"))
-    checks = [
-        [
-            sys.executable,
-            "-m",
-            "pycodestyle",
-            "--max-line-length=100",
-            "--ignore=E203,W503,E501,E704",
-            *targets,
-        ],
-        [sys.executable, "-m", "pyflakes", *targets],
-        [sys.executable, "-m", "compileall", "-q", str(root)],
-    ]
-    failed = False
-    for cmd in checks:
-        print("+", " ".join(cmd[:6]), "...")
-        r = subprocess.run(cmd)
-        if r.returncode != 0:
-            failed = True
-    raise SystemExit(1 if failed else 0)
+        receipt = run_system_audit(FlowChartCharterSystem(seed=7))
+        print(format_audit_report(receipt))
+        print("live_model", LiveModel.from_env().status())
+        raise SystemExit(0 if receipt.get("ok") else 1)
+    except SystemExit:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        print("audit_fallback", exc)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

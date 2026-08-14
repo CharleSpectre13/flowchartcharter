@@ -31,6 +31,11 @@ from .observability import get_metrics_hub
 from .security import ensure_admin_key_on_boot, require_admin_key
 from .state_persister import get_persister
 
+try:
+    from . import __version__ as ENGINE_VERSION
+except Exception:  # noqa: BLE001
+    ENGINE_VERSION = "1.7.0"
+
 
 def _repo_root() -> Path:
     # packages/core/flowchartcharter/api_server.py → repo root
@@ -98,6 +103,103 @@ class WorkloadSubmitRequest(BaseModel):
         if not v:
             raise ValueError("workload must be non-empty")
         return v
+
+
+class HybridRouteRequest(BaseModel):
+    """POST /hybrid/route — classify only (v1.7)."""
+
+    workload: str = Field(..., min_length=1, max_length=2000)
+    hint: Optional[str] = Field(
+        default=None,
+        description="Force lane: simple | multi_hop | global",
+    )
+    metadata: Optional[Dict[str, Any]] = None
+
+    @field_validator("workload")
+    @classmethod
+    def strip_workload(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("workload must be non-empty")
+        return v
+
+
+class HybridWorkloadRequest(BaseModel):
+    """POST /hybrid/workload — full tri-state execute (v1.7)."""
+
+    workload: str = Field(..., min_length=1, max_length=2000)
+    hint: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    seed_entity: Optional[str] = None
+    cfo_ceiling: Optional[int] = Field(default=None, ge=50, le=50000)
+
+    @field_validator("workload")
+    @classmethod
+    def strip_workload(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("workload must be non-empty")
+        return v
+
+
+class SwarmRunRequest(BaseModel):
+    """POST /swarm/run — parallel dataset under CFO ceiling (v1.8)."""
+
+    items: List[Any] = Field(..., min_length=1, max_length=5000)
+    max_workers: Optional[int] = Field(default=None, ge=1, le=64)
+    cfo_ceiling: Optional[int] = Field(default=None, ge=50, le=500_000)
+    mode: str = Field(default="thread", description="thread | asyncio")
+
+
+class HeadhunterRequest(BaseModel):
+    """POST /system/headhunter/requisition."""
+
+    fired_name: Optional[str] = None
+    force: bool = True
+    force_capability: Optional[str] = None
+
+
+class ActionExecuteRequest(BaseModel):
+    """POST /action/execute — schema-gated external ActionUnit."""
+
+    action: str = Field(
+        ...,
+        min_length=1,
+        max_length=80,
+        description="ActionUnit_SlackWebhook | ActionUnit_GitHubPR | aliases",
+    )
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    dry_run: Optional[bool] = None
+    config: Optional[Dict[str, Any]] = None
+    agent_name: Optional[str] = None
+
+
+class SynthesizeCharterRequest(BaseModel):
+    """POST /system/synthesize-charter — v2.1 Coach Trust draft."""
+
+    goal: str = Field(..., min_length=3, max_length=2000)
+    coach_ceiling: Optional[int] = Field(default=None, ge=100, le=5_000_000)
+    playbook_name: Optional[str] = Field(default=None, max_length=160)
+
+
+class ApproveCharterRequest(BaseModel):
+    """POST /system/approve-charter — 1-click Head Coach hand-off."""
+
+    draft_id: str = Field(..., min_length=3, max_length=64)
+    approved_by: str = Field(default="Head Coach", max_length=120)
+    execute_workload: Optional[str] = Field(default=None, max_length=2000)
+
+
+class RejectCharterRequest(BaseModel):
+    draft_id: str = Field(..., min_length=3, max_length=64)
+    reason: str = Field(default="coach_rejected", max_length=400)
+
+
+class TenantEnsureRequest(BaseModel):
+    """POST /system/tenant — ensure tenant namespace."""
+
+    tenant_id: str = Field(..., min_length=1, max_length=80)
+    cfo_ceiling: Optional[int] = Field(default=None, ge=100, le=5_000_000)
 
 
 class WorkloadSubmitResponse(BaseModel):
@@ -204,6 +306,7 @@ class EngineState:
         )
         self.started_at = time.time()
         self.request_count = 0
+        self.hybrid_request_count = 0
         self.restore_report: Dict[str, Any] = {}
         try:
             self.restore_report = self.system.restore_state()
@@ -279,11 +382,12 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="FlowChartCharter Engine API",
         description=(
-            "Execution-first multi-agent nervous system. "
-            "Submit workloads, load Charterfile YAML playbooks, "
-            "query roster TPC, trigger Monday Sync and Analytics Chief."
+            "Execution-first multi-agent nervous system (v1.7 Hybrid). "
+            "Submit workloads, hybrid-route GraphRAG sub-flows under CFO caps, "
+            "load Charterfile YAML playbooks, query roster TPC, trigger Monday "
+            "Sync and Analytics Chief."
         ),
-        version="1.6.1",
+        version=ENGINE_VERSION,
         lifespan=lifespan,
     )
 
@@ -312,20 +416,71 @@ def create_app() -> FastAPI:
         return HealthResponse(
             status="ok",
             engine="FlowChartCharterSystem",
-            version="1.6.1",
+            version=ENGINE_VERSION,
             uptime_s=round(st.uptime_s, 3),
             days_ready=st.system.analytics.days_ready(),
             roster_size=len(st.system.roster),
         )
 
+    @app.get("/system/harness", tags=["system"])
+    async def harness_status(
+        _auth: str = Depends(require_admin_key),
+    ) -> Dict[str, Any]:
+        st = get_state()
+        h = getattr(st.system, "harness", None)
+        if h is None:
+            return {"ok": False, "reason": "no_harness"}
+        snap = h.snapshot()
+        snap["version"] = ENGINE_VERSION
+        return snap
+
+    @app.post("/system/harness/halt", tags=["system"])
+    async def harness_halt(
+        _auth: str = Depends(require_admin_key),
+    ) -> Dict[str, Any]:
+        st = get_state()
+        h = getattr(st.system, "harness", None)
+        if h is None:
+            return {"ok": False, "reason": "no_harness"}
+        h.halt("api")
+        return {"ok": True, **h.snapshot()}
+
+    @app.post("/system/harness/arm", tags=["system"])
+    async def harness_arm(
+        _auth: str = Depends(require_admin_key),
+    ) -> Dict[str, Any]:
+        st = get_state()
+        h = getattr(st.system, "harness", None)
+        if h is None:
+            return {"ok": False, "reason": "no_harness"}
+        h.arm()
+        return {"ok": True, **h.snapshot()}
+
     @app.get("/", tags=["ops"])
     async def root() -> Dict[str, Any]:
         return {
             "service": "FlowChartCharter Engine",
-            "version": "1.4.0",
+            "version": ENGINE_VERSION,
+            "hybrid": "v1.7",
             "docs": "/docs",
             "endpoints": [
                 "POST /workload/submit",
+                "POST /hybrid/route",
+                "POST /hybrid/workload",
+                "GET /hybrid/stats",
+                "POST /swarm/run",
+                "POST /system/headhunter/requisition",
+                "GET /system/v18/stats",
+                "POST /action/execute",
+                "GET /action/security-audit",
+                "POST /system/synthesize-charter",
+                "POST /system/approve-charter",
+                "POST /system/reject-charter",
+                "GET /system/pending-charters",
+                "GET /system/tenants",
+                "POST /system/tenant",
+                "GET /system/llm/providers",
+                "POST /system/llm/golden-eval",
                 "GET /roster/status",
                 "POST /system/trigger-monday-sync",
                 "POST /system/advance-analytics",
@@ -405,6 +560,235 @@ def create_app() -> FastAPI:
             elapsed_ms=round(elapsed, 2),
         )
 
+    # ── v1.7 Hybrid Knowledge Expansion ─────────────────────────────────
+
+    @app.post("/hybrid/route", tags=["hybrid"])
+    async def hybrid_route(body: HybridRouteRequest) -> Dict[str, Any]:
+        """Classify workload into SIMPLE | MULTI_HOP | GLOBAL (no execution)."""
+        st = get_state()
+        st.hybrid_request_count += 1
+        decision = await asyncio.to_thread(
+            st.system.boss.route_workload,
+            body.workload,
+            hint=body.hint,
+            metadata=body.metadata,
+        )
+        return {
+            "version": ENGINE_VERSION,
+            "route": decision.to_dict(),
+            "lane": decision.lane.value,
+        }
+
+    @app.post("/hybrid/workload", tags=["hybrid"])
+    async def hybrid_workload(body: HybridWorkloadRequest) -> Dict[str, Any]:
+        """Full Hybrid GM entry: classify → execute lane under CFO ceiling."""
+        st = get_state()
+        st.hybrid_request_count += 1
+        st.request_count += 1
+        t0 = time.perf_counter()
+
+        if body.cfo_ceiling is not None:
+            st.system.boss.cfo_ceiling = int(body.cfo_ceiling)
+            st.system.boss._hybrid_router = None  # noqa: SLF001 — re-init budgets
+
+        try:
+            envelope = await asyncio.to_thread(
+                st.system.boss.handle_workload,
+                body.workload,
+                hint=body.hint,
+                metadata=body.metadata,
+                seed_entity=body.seed_entity,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=400,
+                detail=f"Hybrid workload failed: {exc}",
+            ) from exc
+
+        elapsed = (time.perf_counter() - t0) * 1000.0
+        return {
+            "request_id": f"HYB-{uuid.uuid4().hex[:10].upper()}",
+            "elapsed_ms": round(elapsed, 2),
+            **envelope,
+        }
+
+    @app.get("/hybrid/stats", tags=["hybrid"])
+    async def hybrid_stats() -> Dict[str, Any]:
+        """Router / MultiHop / Synthesis squad telemetry."""
+        st = get_state()
+        stats = st.system.boss.hybrid_stats()
+        return {
+            "version": ENGINE_VERSION,
+            "hybrid_requests": st.hybrid_request_count,
+            **stats,
+        }
+
+    # ── v1.8 Autonomous Scaling Horizon ─────────────────────────────────
+
+    @app.post("/swarm/run", tags=["swarm"])
+    async def swarm_run(body: SwarmRunRequest) -> Dict[str, Any]:
+        """Parallel SwarmManager over dataset; single post-persist (no races)."""
+        st = get_state()
+        st.request_count += 1
+        t0 = time.perf_counter()
+        try:
+            if (body.mode or "thread").lower() == "asyncio":
+                report = await st.system.run_swarm_async(
+                    body.items,
+                    max_workers=body.max_workers,
+                    cfo_ceiling=body.cfo_ceiling,
+                )
+            else:
+                report = await asyncio.to_thread(
+                    st.system.run_swarm,
+                    body.items,
+                    max_workers=body.max_workers,
+                    cfo_ceiling=body.cfo_ceiling,
+                )
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=400,
+                detail=f"Swarm failed: {exc}",
+            ) from exc
+        elapsed = (time.perf_counter() - t0) * 1000.0
+        return {
+            "request_id": f"SW-{uuid.uuid4().hex[:10].upper()}",
+            "elapsed_ms": round(elapsed, 2),
+            "version": ENGINE_VERSION,
+            **report,
+        }
+
+    @app.post("/system/headhunter/requisition", tags=["system"])
+    async def headhunter_requisition(
+        body: HeadhunterRequest,
+        _auth: str = Depends(require_admin_key),
+    ) -> Dict[str, Any]:
+        """Force Headhunter pipeline (sandbox → roster)."""
+        st = get_state()
+        decision = await asyncio.to_thread(
+            st.system.requisition_new_talent,
+            fired_name=body.fired_name,
+            force=body.force,
+            force_capability=body.force_capability,
+        )
+        return {"version": ENGINE_VERSION, **decision}
+
+    @app.get("/system/v18/stats", tags=["system"])
+    async def v18_stats() -> Dict[str, Any]:
+        st = get_state()
+        return st.system.v18_stats()
+
+    @app.post("/action/execute", tags=["action"])
+    async def action_execute(body: ActionExecuteRequest) -> Dict[str, Any]:
+        """Execute ActionUnit with schema gate + secret-safe telemetry (v2.0)."""
+        from .action_units import create_action_unit, security_audit_action_result
+        from .agents import BossAgent
+
+        st = get_state()
+        st.request_count += 1
+        try:
+            unit = create_action_unit(body.action)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        cfg = dict(body.config or {})
+        if body.dry_run is not None:
+            # Record intent only. Playpen still forces dry-run.
+            cfg["requested_dry_run"] = body.dry_run
+        agent = None
+        if body.agent_name:
+            for a in st.system.roster:
+                if a.name == body.agent_name or a.id == body.agent_name:
+                    agent = a
+                    break
+        if agent is None:
+            agent = next(
+                (
+                    a
+                    for a in st.system.roster
+                    if not isinstance(a, BossAgent)
+                ),
+                None,
+            )
+        harness = getattr(st.system, "harness", None)
+        if harness is not None:
+            out = await asyncio.to_thread(
+                harness.run_action,
+                body.action,
+                agent,
+                body.payload,
+                unit_id=body.action,
+                config=cfg,
+            )
+            raw_action = out.get("action")
+            action_tel = raw_action if isinstance(raw_action, dict) else out
+            return {
+                "version": ENGINE_VERSION,
+                "action": action_tel,
+                "status": out.get("status"),
+                "kill_state": out.get("kill_state"),
+                "halted": out.get("status") == "HALTED",
+                "security_audit": (
+                    security_audit_action_result(unit.last_result)
+                    if getattr(unit, "last_result", None)
+                    else {"passed": out.get("status") != "HALTED"}
+                ),
+                "agent": getattr(agent, "name", None),
+                "entanglement_errors": getattr(agent, "entanglement_errors", 0),
+            }
+        result = await asyncio.to_thread(
+            unit.execute, body.payload, agent=agent, config=cfg
+        )
+        audit = security_audit_action_result(result)
+        return {
+            "version": ENGINE_VERSION,
+            "action": result.to_telemetry(),
+            "security_audit": audit,
+            "agent": getattr(agent, "name", None),
+            "entanglement_errors": getattr(agent, "entanglement_errors", 0),
+        }
+
+    @app.get("/action/security-audit", tags=["action"])
+    async def action_security_audit_probe() -> Dict[str, Any]:
+        """Run static security probe: schema fail + redaction guarantees."""
+        from .action_units import (
+            ActionUnit_GitHubPR,
+            ActionUnit_SlackWebhook,
+            security_audit_action_result,
+        )
+        from .agents import Agent
+
+        probe_agent = Agent("Audit-Probe", "Security Auditor")
+        slack = ActionUnit_SlackWebhook(dry_run=True)
+        bad = slack.execute({"text": ""}, agent=probe_agent)
+        good = slack.execute({"text": "probe ok"}, agent=probe_agent)
+        gh = ActionUnit_GitHubPR(dry_run=True)
+        gh_bad = gh.execute(
+            {
+                "owner": "o",
+                "repo": "r",
+                "title": "t",
+                "head": "h",
+                "base": "main",
+                "diff": "ghp_abcdefghijklmnopqrstuvwxyz12 secret",
+            },
+            agent=probe_agent,
+        )
+        audits = [
+            security_audit_action_result(bad),
+            security_audit_action_result(good),
+            security_audit_action_result(gh_bad),
+        ]
+        return {
+            "version": ENGINE_VERSION,
+            "passed": all(a["passed"] for a in audits),
+            "audits": audits,
+            "entanglement_errors": probe_agent.entanglement_errors,
+            "notes": [
+                "Schema failures block HTTP and apply Fear penalty",
+                "Telemetry redacts tokens/webhooks",
+            ],
+        }
+
     @app.get(
         "/roster/status",
         response_model=RosterStatusResponse,
@@ -437,7 +821,7 @@ def create_app() -> FastAPI:
             muscle_memory_records=len(system.muscle_db.storage),
             living_playbook_records=len(system.playbook.records),
             analytics=system.analytics.export(),
-            engine_version="1.6.1",
+            engine_version=ENGINE_VERSION,
         )
 
     @app.post(
@@ -581,6 +965,151 @@ def create_app() -> FastAPI:
         st = get_state()
         return st.system.compiler.export()
 
+    @app.post("/system/synthesize-charter", tags=["system"])
+    async def synthesize_charter(
+        body: SynthesizeCharterRequest,
+        _auth: str = Depends(require_admin_key),
+    ) -> Dict[str, Any]:
+        """v2.1 — Boss synthesizes YAML from Muscle-Memory; pending approval."""
+        st = get_state()
+        try:
+            result = await asyncio.to_thread(
+                st.system.synthesize_charter,
+                body.goal,
+                coach_ceiling=body.coach_ceiling,
+                playbook_name=body.playbook_name,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return result
+
+    @app.post("/system/approve-charter", tags=["system"])
+    async def approve_charter(
+        body: ApproveCharterRequest,
+        _auth: str = Depends(require_admin_key),
+    ) -> Dict[str, Any]:
+        """v2.1 — Head Coach 1-click approval (loads playbook; optional execute)."""
+        st = get_state()
+        try:
+            result = await asyncio.to_thread(
+                st.system.approve_charter,
+                body.draft_id,
+                approved_by=body.approved_by,
+                execute_workload=body.execute_workload,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        try:
+            st.system.persist_state()
+        except Exception:
+            pass
+        return result
+
+    @app.post("/system/reject-charter", tags=["system"])
+    async def reject_charter(
+        body: RejectCharterRequest,
+        _auth: str = Depends(require_admin_key),
+    ) -> Dict[str, Any]:
+        st = get_state()
+        try:
+            return await asyncio.to_thread(
+                st.system.reject_charter,
+                body.draft_id,
+                reason=body.reason,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/system/pending-charters", tags=["system"])
+    async def pending_charters(
+        _auth: str = Depends(require_admin_key),
+    ) -> Dict[str, Any]:
+        st = get_state()
+        return st.system.list_pending_charters()
+
+    @app.get("/system/tenants", tags=["system"])
+    async def list_tenants(
+        _auth: str = Depends(require_admin_key),
+    ) -> Dict[str, Any]:
+        """v2.2 multi-tenant registry snapshot."""
+        from .tenant import get_tenant_registry
+
+        st = get_state()
+        reg = get_tenant_registry()
+        return {
+            "version": ENGINE_VERSION,
+            "active_tenant": getattr(st.system, "tenant_id", "default"),
+            "tenants": reg.list_tenants(),
+        }
+
+    @app.post("/system/tenant", tags=["system"])
+    async def ensure_tenant(
+        body: TenantEnsureRequest,
+        _auth: str = Depends(require_admin_key),
+    ) -> Dict[str, Any]:
+        from .tenant import get_tenant_registry
+
+        st = get_state()
+        reg = get_tenant_registry()
+        eng = reg.get_or_create(body.tenant_id, cfo_ceiling=body.cfo_ceiling)
+        # Optionally switch live system tenant context
+        st.system.tenant_id = eng.tenant_id
+        st.system.tenant = eng
+        return {"version": ENGINE_VERSION, "tenant": eng.stats()}
+
+    @app.get("/system/llm/providers", tags=["system"])
+    async def llm_providers(
+        _auth: str = Depends(require_admin_key),
+    ) -> Dict[str, Any]:
+        from .llm_providers import active_provider_name, list_providers
+
+        return {
+            "version": ENGINE_VERSION,
+            "active": active_provider_name(),
+            "providers": [
+                {
+                    "name": p.name,
+                    "live": p.live,
+                    "available": getattr(p, "available", True),
+                    "env_key": p.env_key,
+                    "key_env_used": getattr(p, "key_env_used", ""),
+                    "model": p.model,
+                }
+                for p in list_providers()
+            ],
+        }
+
+    @app.post("/system/llm/golden-eval", tags=["system"])
+    async def llm_golden_eval(
+        _auth: str = Depends(require_admin_key),
+    ) -> Dict[str, Any]:
+        """Run golden-task structured-output suite (mock-safe)."""
+        from .llm_providers import run_golden_evals
+
+        st = get_state()
+        return await asyncio.to_thread(
+            run_golden_evals,
+            client=getattr(st.system, "llm_client", None),
+        )
+
+    @app.post("/system/llm/live-golden", tags=["system"])
+    async def llm_live_golden(
+        _auth: str = Depends(require_admin_key),
+    ) -> Dict[str, Any]:
+        """Gate 2: live goldens under CFO ceiling. Honest if Port is not live."""
+        from .live_golden import run_live_goldens
+
+        st = get_state()
+        return await asyncio.to_thread(
+            run_live_goldens,
+            cfo_ceiling=min(2500, int(getattr(st.system, "token_budget", 2500))),
+            client=getattr(st.system, "llm_client", None),
+        )
+
     @app.post("/system/upgrade-personnel", tags=["system"])
     async def upgrade_personnel(
         body: PersonnelUpgradeRequest,
@@ -606,8 +1135,11 @@ def create_app() -> FastAPI:
             },
             "compiled_playbook": st.system.compiler.export(),
             "muscle_db": st.system.muscle_db.stats(),
+            "hybrid": st.system.boss.hybrid_stats(),
             "requests": st.request_count,
+            "hybrid_requests": st.hybrid_request_count,
             "uptime_s": round(st.uptime_s, 3),
+            "version": ENGINE_VERSION,
             "state_persistence": {
                 "path": str(get_persister().path),
                 "restore": st.restore_report,

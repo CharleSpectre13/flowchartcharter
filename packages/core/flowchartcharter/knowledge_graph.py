@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, List, Optional, Set
 import json
+import re
 
 
 @dataclass
@@ -424,6 +425,8 @@ def build_ontology() -> Dict[str, Any]:
         "entities": [asdict(e) for e in entities],
         "relations": [asdict(r) for r in relations],
         "community_reports": _community_reports(entities, relations),
+        "text_units": [],
+        "full_rebuild": False,
         "sources": {
             "drive": [
                 "The FlowChartCharter Blueprint (Corporate Governance)",
@@ -461,12 +464,264 @@ class KnowledgeGraph:
 
     def __init__(self, data: Optional[Dict[str, Any]] = None):
         self.data = data or build_ontology()
-        self._by_id = {e["id"]: e for e in self.data["entities"]}
-        self._out: Dict[str, List[Dict]] = {}
-        self._in: Dict[str, List[Dict]] = {}
-        for r in self.data["relations"]:
+        self.data.setdefault("text_units", [])
+        self.data.setdefault("full_rebuild", False)
+        self.data.setdefault("aliases", {})
+        self._reindex()
+
+    def _reindex(self) -> None:
+        """Rebuild adjacency only. Not a corpus rebuild."""
+        self._by_id = {
+            e["id"]: e for e in self.data.get("entities") or [] if isinstance(e, dict)
+        }
+        self._out = {}
+        self._in = {}
+        for r in self.data.get("relations") or []:
+            if not isinstance(r, dict):
+                continue
             self._out.setdefault(r["src"], []).append(r)
             self._in.setdefault(r["dst"], []).append(r)
+
+    def resolve_alias(self, name: str) -> str:
+        from .charter_memory import stable_id
+
+        raw = (name or "").strip()
+        slug = stable_id(raw)
+        aliases = self.data.setdefault("aliases", {})
+        if raw.lower() in aliases:
+            return str(aliases[raw.lower()])
+        if slug in aliases:
+            return str(aliases[slug])
+        if slug in self._by_id:
+            return slug
+        return slug
+
+    def register_alias(self, title: str, eid: str) -> None:
+        from .charter_memory import stable_id
+
+        aliases = self.data.setdefault("aliases", {})
+        if title:
+            aliases[title.lower()] = eid
+        aliases[stable_id(title)] = eid
+        aliases[eid] = eid
+
+    def entity_count(self) -> int:
+        return len(self.data.get("entities") or [])
+
+    def ingest_delta(
+        self,
+        entities: List[Dict[str, Any]],
+        relations: List[Dict[str, Any]],
+        *,
+        text_unit: Optional[Dict[str, Any]] = None,
+    ) -> Any:
+        """Delta upsert. {not full_rebuild} ingest {not full_rebuild ∧ |E|'>=|E|}."""
+        from .charter_memory import MergeReceipt
+
+        before = self.entity_count()
+        by_id = {
+            e["id"]: e for e in self.data["entities"] if isinstance(e, dict)
+        }
+        added = 0
+        updated = 0
+        for raw in entities:
+            if not isinstance(raw, dict) or not raw.get("id"):
+                continue
+            eid = str(raw["id"])
+            title = str(raw.get("title") or "")
+            if title:
+                aliased = self.resolve_alias(title)
+                if aliased in by_id:
+                    eid = aliased
+                    raw["id"] = eid
+            if eid in by_id:
+                updated += 1
+                old = by_id[eid]
+                srcs = list(
+                    dict.fromkeys(
+                        list(old.get("sources") or []) + list(raw.get("sources") or [])
+                    )
+                )
+                old["sources"] = srcs
+                desc = str(raw.get("description") or "")
+                if desc and len(desc) > len(str(old.get("description") or "")):
+                    old["description"] = desc
+            else:
+                row = dict(raw)
+                row.setdefault("community", "fcc_community")
+                row.setdefault("type", "Concept")
+                row.setdefault("importance", 0.55)
+                self.data["entities"].append(row)
+                by_id[eid] = row
+                added += 1
+                self.register_alias(str(row.get("title") or eid), eid)
+        rel_keys = {
+            (r.get("src"), r.get("dst"), r.get("type"))
+            for r in self.data["relations"]
+            if isinstance(r, dict)
+        }
+        rel_added = 0
+        for raw in relations:
+            if not isinstance(raw, dict):
+                continue
+            key = (raw.get("src"), raw.get("dst"), raw.get("type"))
+            if key in rel_keys or not key[0] or not key[1]:
+                continue
+            self.data["relations"].append(dict(raw))
+            rel_keys.add(key)
+            rel_added += 1
+        if text_unit:
+            row = dict(text_unit)
+            row.setdefault("valid", True)
+            sid = str(row.get("source_id") or "")
+            uid = str(row.get("unit_id") or "")
+            if sid:
+                self.supersede_units(sid, keep_id=uid)
+            self.data.setdefault("text_units", []).append(row)
+        self.data["full_rebuild"] = False
+        self._reindex()
+        self._refresh_fcc_communities()
+        return MergeReceipt(
+            added=added,
+            updated=updated,
+            relations_added=rel_added,
+            entity_count_before=before,
+            entity_count_after=self.entity_count(),
+            full_rebuild=False,
+            source_id=str((text_unit or {}).get("source_id") or ""),
+        )
+
+    def _refresh_fcc_communities(self) -> None:
+        by: Dict[str, List[Dict[str, Any]]] = {}
+        for ent in self.data.get("entities") or []:
+            if not isinstance(ent, dict):
+                continue
+            cid = str(ent.get("community") or "fcc_community")
+            by.setdefault(cid, []).append(ent)
+        reports: Dict[str, Dict[str, Any]] = {}
+        labels = dict(COMMUNITIES)
+        labels.setdefault("fcc_community", "FCC incremental community")
+        for cid, members in by.items():
+            titles = [
+                str(m.get("title") or m.get("id"))
+                for m in sorted(
+                    members, key=lambda x: -float(x.get("importance") or 0)
+                )
+            ]
+            reports[cid] = {
+                "id": cid,
+                "title": labels.get(cid, cid),
+                "executive_summary": f"{labels.get(cid, cid)}: {', '.join(titles[:5])}",
+                "entity_count": len(members),
+                "top_entities": titles[:8],
+                "importance": max(
+                    float(m.get("importance") or 0) for m in members
+                ),
+            }
+        self.data["community_reports"] = reports
+
+    def lazy_search(self, query: str, top_k: int = 8) -> Dict[str, Any]:
+        """Query-time concept overlap. Backend name is fcc_lazy, not GraphRAG."""
+        q = (query or "").lower()
+        tokens = [t for t in re.findall(r"[a-z0-9_]{3,}", q)]
+        scored: List[tuple[float, Dict[str, Any]]] = []
+        for ent in self.data.get("entities") or []:
+            if not isinstance(ent, dict):
+                continue
+            blob = " ".join(
+                [
+                    str(ent.get("id") or ""),
+                    str(ent.get("title") or ""),
+                    str(ent.get("description") or ""),
+                ]
+            ).lower()
+            hits = sum(1 for t in tokens if t in blob)
+            if not hits and q and q in blob:
+                hits = 2
+            if hits:
+                scored.append((float(hits) + float(ent.get("importance") or 0), ent))
+        scored.sort(key=lambda x: -x[0])
+        nodes = [e for _, e in scored[: max(1, top_k)]]
+        return {
+            "query": query,
+            "nodes": nodes,
+            "backend": "fcc_lazy",
+            "full_rebuild": False,
+        }
+
+    def supersede_units(self, source_id: str, *, keep_id: str = "") -> int:
+        """Invalidate prior units that share a source/goal. Keep keep_id."""
+        n = 0
+        for unit in self.data.get("text_units") or []:
+            if not isinstance(unit, dict):
+                continue
+            if str(unit.get("source_id") or "") != source_id:
+                continue
+            if keep_id and str(unit.get("unit_id") or "") == keep_id:
+                continue
+            if unit.get("valid", True):
+                unit["valid"] = False
+                n += 1
+        return n
+
+    def invalid_unit_ids(self) -> set[str]:
+        ids: set[str] = set()
+        for unit in self.data.get("text_units") or []:
+            if not isinstance(unit, dict) or unit.get("valid", True):
+                continue
+            uid = str(unit.get("unit_id") or "")
+            sid = str(unit.get("source_id") or "")
+            if uid:
+                ids.add(uid)
+            if sid:
+                ids.add(sid)
+        return ids
+
+    def search_units(self, query: str, top_k: int = 8) -> Dict[str, Any]:
+        """Passage search over valid TextUnits. Not GraphRAG."""
+        q = (query or "").lower()
+        q_tokens = [t for t in re.findall(r"[a-z0-9_]{3,}", q)]
+        scored: List[tuple[float, Dict[str, Any]]] = []
+        units = [
+            u
+            for u in (self.data.get("text_units") or [])
+            if isinstance(u, dict) and u.get("valid", True)
+        ]
+        df: Dict[str, int] = {}
+        for unit in units:
+            blob = str(unit.get("text") or "").lower()
+            seen = set(re.findall(r"[a-z0-9_]{3,}", blob))
+            for tok in seen:
+                df[tok] = df.get(tok, 0) + 1
+        n_docs = max(1, len(units))
+        for unit in units:
+            blob = str(unit.get("text") or "").lower()
+            if not blob:
+                continue
+            tf_hits = 0.0
+            for tok in q_tokens:
+                tf = blob.count(tok)
+                if tf:
+                    idf = 1.0 + (n_docs / (1 + df.get(tok, 0)))
+                    tf_hits += tf * idf
+            if q and q in blob:
+                tf_hits += 4.0
+            if tf_hits <= 0:
+                continue
+            row = dict(unit)
+            row["id"] = str(unit.get("unit_id") or "")
+            row["title"] = str(unit.get("source_id") or row["id"])
+            row["description"] = str(unit.get("text") or "")[:400]
+            row["source"] = str(unit.get("unit_id") or unit.get("source_id") or "")
+            row["score"] = tf_hits
+            scored.append((tf_hits, row))
+        scored.sort(key=lambda x: -x[0])
+        return {
+            "query": query,
+            "units": [u for _, u in scored[: max(1, top_k)]],
+            "backend": "fcc_units",
+            "full_rebuild": False,
+        }
 
     def local_search(self, entity_id: str, hops: int = 2) -> Dict[str, Any]:
         """1–2 hop expansion around an entity (local GraphRAG-style)."""
@@ -510,8 +765,207 @@ class KnowledgeGraph:
             "synthesis": " | ".join(r["executive_summary"] for r in reports[:4]),
         }
 
+    def fcc_components(self) -> Dict[str, str]:
+        """Connected components. Not Leiden. Not GraphRAG."""
+        ids = [
+            str(e["id"])
+            for e in (self.data.get("entities") or [])
+            if isinstance(e, dict) and e.get("id")
+        ]
+        parent = {i: i for i in ids}
+
+        def find(x: str) -> str:
+            while parent.get(x, x) != x:
+                parent[x] = parent.get(parent[x], x)
+                x = parent[x]
+            return x
+
+        def union(a: str, b: str) -> None:
+            if a not in parent or b not in parent:
+                return
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                parent[rb] = ra
+
+        for rel in self.data.get("relations") or []:
+            if isinstance(rel, dict):
+                union(str(rel.get("src") or ""), str(rel.get("dst") or ""))
+        roots: Dict[str, str] = {}
+        n = 0
+        out: Dict[str, str] = {}
+        for i in ids:
+            root = find(i)
+            if root not in roots:
+                roots[root] = f"fcc_component_{n}"
+                n += 1
+            out[i] = roots[root]
+        return out
+
+    def qfs_search(self, query: str, top_k: int = 8) -> Dict[str, Any]:
+        """Map partials per bag, helpfulness reduce. Not Leiden. Not GraphRAG."""
+        units = [
+            u
+            for u in (self.data.get("text_units") or [])
+            if isinstance(u, dict) and u.get("valid", True)
+        ]
+        empty = {
+            "query": query,
+            "units": [],
+            "synthesis": "",
+            "bags": 0,
+            "partials": [],
+        }
+        if not units:
+            return empty
+        q = (query or "").lower()
+        q_tokens = [t for t in re.findall(r"[a-z0-9_]{3,}", q)]
+        sent_re = re.compile(r"(?<=[.!?])\s+")
+        comps = self.fcc_components()
+        bags: Dict[str, List[Dict[str, Any]]] = {}
+        for unit in units:
+            sid = str(unit.get("source_id") or "")
+            bag = sid or str(unit.get("community") or "")
+            if not bag:
+                blob = str(unit.get("text") or "").lower()
+                bag = "fcc_orphan"
+                for eid, cid in comps.items():
+                    title = str((self._by_id.get(eid) or {}).get("title") or eid)
+                    if title.lower() in blob:
+                        bag = cid
+                        break
+            bags.setdefault(bag, []).append(unit)
+        partials: List[Dict[str, Any]] = []
+        for bag_id, group in bags.items():
+            sentences: List[Dict[str, Any]] = []
+            blob = " ".join(str(u.get("text") or "") for u in group).lower()
+            covered = sum(1 for t in q_tokens if t in blob)
+            if q and q in blob:
+                covered = max(covered, 1)
+            help_n = 0
+            if q_tokens:
+                help_n = int(100 * covered / max(1, len(q_tokens)))
+            elif covered:
+                help_n = 50
+            if covered <= 0:
+                help_n = 0
+            if help_n <= 0:
+                continue
+            for unit in group:
+                text = str(unit.get("text") or "").strip()
+                for sent in sent_re.split(text) or [text]:
+                    sent = sent.strip()
+                    if len(sent) < 8:
+                        continue
+                    low = sent.lower()
+                    score = sum(1.0 for t in q_tokens if t in low)
+                    if q and q in low:
+                        score += 3.0
+                    if score <= 0:
+                        continue
+                    sentences.append(
+                        {
+                            "id": str(unit.get("unit_id") or ""),
+                            "title": bag_id,
+                            "description": sent[:400],
+                            "source": str(
+                                unit.get("unit_id") or unit.get("source_id") or ""
+                            ),
+                            "score": score,
+                            "community": bag_id,
+                        }
+                    )
+            if not sentences:
+                continue
+            sentences.sort(key=lambda r: -float(r.get("score") or 0))
+            partials.append(
+                {
+                    "bag": bag_id,
+                    "helpfulness": help_n,
+                    "sentences": [s["description"] for s in sentences],
+                    "hits": sentences,
+                }
+            )
+        partials.sort(key=lambda p: -int(p.get("helpfulness") or 0))
+        picked: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        for part in partials:
+            for row in part.get("hits") or []:
+                key = str(row.get("description") or "")[:80]
+                if key in seen:
+                    continue
+                seen.add(key)
+                picked.append(row)
+                if len(picked) >= max(1, top_k):
+                    break
+            if len(picked) >= max(1, top_k):
+                break
+        synthesis = " ".join(r["description"] for r in picked)
+        return {
+            "query": query,
+            "units": picked,
+            "synthesis": synthesis,
+            "bags": len(partials),
+            "partials": partials,
+            "backend": "fcc_qfs",
+            "reduce_mode": "extractive",
+        }
+
     def to_json(self, indent: int = 2) -> str:
         return json.dumps(self.data, indent=indent)
 
     def export_dict(self) -> Dict[str, Any]:
         return self.data
+
+    def export_delta(self) -> Dict[str, Any]:
+        """Persistable slice. Not a full GraphRAG rebuild."""
+        sourced = [
+            e
+            for e in (self.data.get("entities") or [])
+            if isinstance(e, dict) and e.get("sources")
+        ]
+        return {
+            "text_units": list(self.data.get("text_units") or []),
+            "aliases": dict(self.data.get("aliases") or {}),
+            "entities": sourced,
+            "relations": [
+                r
+                for r in (self.data.get("relations") or [])
+                if isinstance(r, dict)
+                and (
+                    r.get("description")
+                    and r.get("description") != "co-occurrence"
+                )
+            ],
+            "full_rebuild": False,
+        }
+
+    def save_delta(self, path: Any) -> str:
+        from pathlib import Path
+
+        dest = Path(path)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(json.dumps(self.export_delta(), default=str), encoding="utf-8")
+        return str(dest)
+
+    def load_delta(self, path: Any) -> Dict[str, Any]:
+        from pathlib import Path
+
+        dest = Path(path)
+        if not dest.is_file():
+            return {"ok": False, "reason": "missing"}
+        blob = json.loads(dest.read_text(encoding="utf-8"))
+        for unit in blob.get("text_units") or []:
+            if isinstance(unit, dict):
+                self.ingest_delta([], [], text_unit=unit)
+        self.ingest_delta(
+            list(blob.get("entities") or []),
+            list(blob.get("relations") or []),
+        )
+        aliases = blob.get("aliases") or {}
+        if isinstance(aliases, dict):
+            self.data.setdefault("aliases", {}).update(aliases)
+        return {
+            "ok": True,
+            "units": len(self.data.get("text_units") or []),
+            "full_rebuild": False,
+        }

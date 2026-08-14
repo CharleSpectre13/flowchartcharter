@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "flowchart-charter-engine"
-version = "1.6.1"
-description = "Execution-first multi-agent engine: YAML Charterfiles, TPC fear metrics, Muscle-Memory vectors, Boss hierarchy — the process alternative to GraphRAG."
+version = "3.3.0"
+description = "Accountable Agent OS: Charter + harness + GraphRAG-as-tool. pip install from GitHub."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
@@ -22,7 +22,9 @@ keywords = [
   "charterfile",
   "state-machine",
   "muscle-memory",
-  "graphrag-alternative",
+  "graphrag",
+  "hybrid-router",
+  "multi-hop",
   "fastapi",
   "orchestration",
   "tpc",
@@ -75,39 +77,14 @@ fcc = "flowchartcharter.fcc_cli:run"
 fcc-sandbox = "flowchartcharter.simulation_sandbox:run_phase2_sandbox"
 fcc-audit = "flowchartcharter.cli:audit_main"
 
-[project.urls]
-Homepage = "https://github.com/CharleSpectre13/flowchartcharter"
-Documentation = "https://github.com/CharleSpectre13/flowchartcharter#readme"
-Repository = "https://github.com/CharleSpectre13/flowchartcharter"
-Issues = "https://github.com/CharleSpectre13/flowchartcharter/issues"
-"Bug Tracker" = "https://github.com/CharleSpectre13/flowchartcharter/issues"
-
 [tool.setuptools]
-include-package-data = true
+package-dir = {"" = "packages/core"}
 
 [tool.setuptools.packages.find]
 where = ["packages/core"]
 include = ["flowchartcharter*"]
 
-[tool.setuptools.package-data]
-flowchartcharter = ["py.typed"]
-
-[tool.black]
-line-length = 100
-target-version = ["py310", "py311", "py312"]
-extend-exclude = '''
-/(
-  \.git
-  | dist
-  | build
-  | \.venv
-)/
-'''
-
-[tool.pytest.ini_options]
-testpaths = ["examples"]
-python_files = ["test_*.py"]
-addopts = "-q"
-
-[tool.pycodestyle]
-max-line-length = 100
+[project.urls]
+Homepage = "https://github.com/CharleSpectre13/flowchartcharter"
+Documentation = "https://github.com/CharleSpectre13/flowchartcharter#readme"
+Repository = "https://github.com/CharleSpectre13/flowchartcharter"

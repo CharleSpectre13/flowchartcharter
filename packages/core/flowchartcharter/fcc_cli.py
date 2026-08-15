@@ -606,6 +606,55 @@ def cmd_library(
         console.print(table)
 
 
+@app.command("first-day")
+def cmd_first_day() -> None:
+    """Seed the starter house, walk one job, print a stranger receipt."""
+    os.environ.setdefault("FCC_HARNESS_PERSIST", "0")
+    from flowchartcharter.system import FlowChartCharterSystem
+
+    out = FlowChartCharterSystem(seed=15).first_day()
+    console.print_json(data={
+        "ok": out.get("ok"),
+        "charter": out.get("charter"),
+        "quality": out.get("quality"),
+        "shelves": out.get("shelves"),
+        "receipt_hash": (out.get("receipt") or {}).get("hash"),
+        "claimed_graphrag": False,
+    })
+
+
+@app.command("remember")
+def cmd_remember(
+    note: str = typer.Argument(..., help="One drip of house memory"),
+) -> None:
+    """Save one note. No corpus required."""
+    os.environ.setdefault("FCC_HARNESS_PERSIST", "0")
+    from flowchartcharter.system import FlowChartCharterSystem
+
+    sys_ = FlowChartCharterSystem(seed=15)
+    sys_.first_day()
+    rec = sys_.remember(note)
+    console.print_json(data=rec)
+
+
+@app.command("ask")
+def cmd_ask(prompt: str = typer.Argument(..., help="Ask the world mouth")) -> None:
+    """Call Grok or the house chef if present. Else honest none."""
+    from flowchartcharter.house import ask_world
+
+    console.print_json(data=ask_world(prompt))
+
+
+@app.command("verify-receipt")
+def cmd_verify(path: str = typer.Argument(..., help="JSON or JSONL receipt")) -> None:
+    """Offline stranger check. No vendor."""
+    from flowchartcharter.house import verify_receipt_path
+
+    out = verify_receipt_path(path)
+    console.print_json(data=out)
+    raise typer.Exit(0 if out.get("ok") else 1)
+
+
 @app.command("version")
 def cmd_version() -> None:
     """Print package version."""

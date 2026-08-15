@@ -29,6 +29,7 @@ PROVIDER_SPECIFIC_ENV: Dict[str, str] = {
     "openai": "OPENAI_API_KEY",
     "xai": "XAI_API_KEY",
     "gemini": "GEMINI_API_KEY",
+    "ollama": "FCC_OLLAMA_KEY",
 }
 
 DEFAULT_MODELS: Dict[str, str] = {
@@ -36,20 +37,39 @@ DEFAULT_MODELS: Dict[str, str] = {
     "openai": "gpt-4o-mini",
     "xai": "grok-4.5",
     "gemini": "gemini-1.5-flash",
+    "ollama": "llama3.2",
 }
 
 DEFAULT_BASE_URLS: Dict[str, str] = {
     "openai": "https://api.openai.com/v1",
     "xai": "https://api.x.ai/v1",
     "gemini": "https://generativelanguage.googleapis.com/v1beta",
+    "ollama": "http://127.0.0.1:11434/v1",
 }
 
 
-def detect_live_provider() -> str:
-    """Auto-select a live vendor when a key exists. Else mock.
+def ollama_reachable(base: str = "") -> bool:
+    """Short probe. Never required. Fail closed."""
+    root = (
+        base
+        or os.environ.get("FCC_OLLAMA_URL")
+        or "http://127.0.0.1:11434"
+    ).rstrip("/")
+    if root.endswith("/v1"):
+        root = root[:-3]
+    try:
+        req = urllib.request.Request(root + "/api/tags", method="GET")
+        with urllib.request.urlopen(req, timeout=0.4) as resp:
+            return 200 <= int(resp.status) < 300
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+        return False
 
-    FCC_LLM_PROVIDER=mock|xai|openai|gemini|auto
-    Unset or auto → first present key (xAI, then OpenAI, then Gemini).
+
+def detect_live_provider() -> str:
+    """Auto-select a live vendor when a key exists. Else optional Ollama. Else mock.
+
+    FCC_LLM_PROVIDER=mock|xai|openai|gemini|ollama|auto
+    FCC_OLLAMA=1 allows a localhost probe. Never required.
     """
     forced = (os.environ.get("FCC_LLM_PROVIDER") or "").strip().lower()
     if forced and forced not in {"", "auto"}:
@@ -60,6 +80,8 @@ def detect_live_provider() -> str:
         return "openai"
     if (os.environ.get("GEMINI_API_KEY") or "").strip():
         return "gemini"
+    if os.environ.get("FCC_OLLAMA", "0") == "1" and ollama_reachable():
+        return "ollama"
     return "mock"
 
 
@@ -73,6 +95,9 @@ def resolve_provider_key(provider: str) -> Tuple[str, str]:
     name = (provider or "mock").lower()
     if name == "mock":
         return "", ""
+    if name == "ollama":
+        specific = (os.environ.get("FCC_OLLAMA_KEY") or "ollama").strip()
+        return specific, "FCC_OLLAMA_KEY"
     specific_env = PROVIDER_SPECIFIC_ENV.get(name, "")
     if specific_env:
         specific = os.environ.get(specific_env, "") or ""
@@ -198,6 +223,8 @@ class LLMBridge:
 
     @property
     def live(self) -> bool:
+        if self.config.provider == "ollama":
+            return ollama_reachable(self.config.base_url)
         return self.config.provider != "mock" and bool(self.config.api_key)
 
     def execute_worker(
@@ -275,7 +302,7 @@ class LLMBridge:
         )
         self.last_sampling = samp.to_dict()
 
-        if cfg.provider in ("openai", "xai"):
+        if cfg.provider in ("openai", "xai", "ollama"):
             url = f"{cfg.base_url.rstrip('/')}/chat/completions"
             body: Dict[str, Any] = {
                 "model": cfg.model,

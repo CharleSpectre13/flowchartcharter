@@ -36,6 +36,8 @@ from .executive import (
 )
 from .knowledge_graph import KnowledgeGraph, build_ontology
 from .live_model import LiveModel
+from .house import first_day, remember, ask_world, shelves, verify_receipt_path
+from .starter_house import STARTER_CHARTER, STARTER_DOCS
 from .llm_bridge import detect_live_provider, LLMBridge, LLMBridgeConfig
 from .stranger_receipt import issue_receipt, verify_receipt, verify_chain
 from .charter_memory import (
@@ -279,6 +281,12 @@ __all__ = [
     "verify_extraction",
     "bind_episode",
     "LiveModel",
+    "first_day",
+    "remember",
+    "ask_world",
+    "shelves",
+    "verify_receipt_path",
+    "STARTER_CHARTER",
     "detect_live_provider",
     "run_system_audit",
     "format_audit_report",
@@ -460,4 +468,4 @@ __all__ = [
 
 
 _REEXPORT_FITNESS = (DEFAULT_ALPHA, DEFAULT_BETA, DEFAULT_GAMMA, DEFAULT_DELTA)
-__version__ = "3.3.0"
+__version__ = "3.4.0"

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "flowchart-charter-engine"
-version = "3.3.0"
-description = "Accountable Agent OS: Charter + harness + GraphRAG-as-tool. pip install from GitHub."
+version = "3.4.0"
+description = "Accountable house: Charter + harness + optional Grok/Ollama. No key required."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }

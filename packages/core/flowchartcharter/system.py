@@ -219,6 +219,26 @@ class FlowChartCharterSystem:
         self.last_receipt = rec
         return rec
 
+    def first_day(self) -> Dict[str, Any]:
+        from .house import first_day as _first_day
+
+        return _first_day(self)
+
+    def remember(self, text: str, *, source_id: str = "") -> Dict[str, Any]:
+        from .house import remember as _remember
+
+        return _remember(self, text, source_id=source_id)
+
+    def ask_world(self, prompt: str) -> Dict[str, Any]:
+        from .house import ask_world as _ask
+
+        return _ask(prompt)
+
+    def shelves(self) -> Dict[str, Any]:
+        from .house import shelves as _shelves
+
+        return _shelves(self)
+
     def roster_capability_map(self) -> Dict[str, float]:
         caps: Dict[str, float] = {}
         for a in self.roster:

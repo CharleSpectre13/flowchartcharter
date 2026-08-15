@@ -660,13 +660,65 @@ class ActionUnit_GitHubPR(ActionUnit):
 # Registry + factory (CharterHub / compiler)
 # ---------------------------------------------------------------------------
 
+class WorldMouthPayload(BaseModel):
+    prompt: str = Field(..., min_length=1, max_length=4000)
+    max_tokens: int = Field(default=256, ge=32, le=512)
+
+
+@dataclass
+class ActionUnit_WorldMouth(ActionUnit):
+    """Grok / Ollama / none — only through Halt + schema + cap."""
+
+    unit_id: str = "ActionUnit_WorldMouth"
+    unit_type: str = "world_mouth"
+    payload_schema: Type[BaseModel] = WorldMouthPayload
+    dry_run: bool = False
+
+    def _http_execute(
+        self,
+        payload: BaseModel,
+        *,
+        config: Mapping[str, Any],
+    ) -> tuple[int, str, Optional[str], int]:
+        from .live_model import LiveModel
+
+        assert isinstance(payload, WorldMouthPayload)
+        brain = LiveModel.from_env()
+        st = brain.status()
+        out = brain.complete(payload.prompt, max_tokens=int(payload.max_tokens))
+        if st.get("live") and st.get("provider") == "xai":
+            shelf = "grok_http"
+        elif st.get("live") and st.get("provider") == "ollama":
+            shelf = "local_llm"
+        elif st.get("live"):
+            shelf = f"{st.get('provider')}_http"
+        else:
+            shelf = "none"
+        body = {
+            "text": out.get("text") or "",
+            "live": bool(out.get("live")),
+            "shelf": shelf,
+            "tokens": int(out.get("tokens") or 0),
+            "reason": out.get("reason") or "",
+            "claimed_graphrag": False,
+        }
+        return 200, json.dumps(body), f"mouth://{shelf}", 0
+
+
+# ---------------------------------------------------------------------------
+# Registry + factory (CharterHub / compiler)
+# ---------------------------------------------------------------------------
+
 ACTION_REGISTRY: Dict[str, Type[ActionUnit]] = {
     "ActionUnit_SlackWebhook": ActionUnit_SlackWebhook,
     "ActionUnit_GitHubPR": ActionUnit_GitHubPR,
+    "ActionUnit_WorldMouth": ActionUnit_WorldMouth,
     "slack_webhook": ActionUnit_SlackWebhook,
     "github_pr": ActionUnit_GitHubPR,
+    "world_mouth": ActionUnit_WorldMouth,
     "slack": ActionUnit_SlackWebhook,
     "github": ActionUnit_GitHubPR,
+    "ask": ActionUnit_WorldMouth,
 }
 
 

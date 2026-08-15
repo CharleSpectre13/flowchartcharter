@@ -12,7 +12,15 @@ from typing import Any, Dict, FrozenSet, Optional
 
 
 ALLOWED_ACTIONS: FrozenSet[str] = frozenset(
-    {"ActionUnit_SlackWebhook", "ActionUnit_GitHubPR", "slack", "github_pr"}
+    {
+        "ActionUnit_SlackWebhook",
+        "ActionUnit_GitHubPR",
+        "ActionUnit_WorldMouth",
+        "slack",
+        "github_pr",
+        "world_mouth",
+        "ask",
+    }
 )
 DENIED_ACTIONS: FrozenSet[str] = frozenset(
     {

@@ -193,6 +193,9 @@ class FlowChartCharterSystem:
                 tags=("cleansing", "high-entropy"),
             )
         )
+        from .house import open_house
+
+        open_house(self)
 
     def ingest_memory(
         self,

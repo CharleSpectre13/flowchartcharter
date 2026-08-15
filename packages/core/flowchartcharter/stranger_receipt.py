@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
+_META = {"hash", "previousReceiptHash", "sig", "pub", "sig_alg", "kind"}
+
+
 def _digest(prev: str, payload: Dict[str, Any]) -> str:
     blob = json.dumps(payload, sort_keys=True, default=str)
     return hashlib.sha256(f"{prev}\n{blob}".encode("utf-8")).hexdigest()
@@ -53,6 +56,9 @@ def issue_receipt(
         "previousReceiptHash": prev_hash,
         "hash": digest,
     }
+    from .house_sign import sign_hash
+
+    receipt.update(sign_hash(digest))
     return receipt
 
 
@@ -65,11 +71,7 @@ def verify_receipt(receipt: Dict[str, Any]) -> bool:
         return False
     prev = str(receipt.get("previousReceiptHash") or "")
     expected = str(receipt.get("hash") or "")
-    body = {
-        k: v
-        for k, v in receipt.items()
-        if k not in {"hash", "previousReceiptHash"}
-    }
+    body = {k: v for k, v in receipt.items() if k not in _META}
     return expected == _digest(prev, body) and bool(expected)
 
 

@@ -591,6 +591,16 @@ class KnowledgeGraph:
             source_id=str((text_unit or {}).get("source_id") or ""),
         )
 
+    def append_text_unit(self, text_unit: Dict[str, Any]) -> None:
+        """Store a note even when extract fails. House drip."""
+        row = dict(text_unit)
+        row.setdefault("valid", True)
+        sid = str(row.get("source_id") or "")
+        uid = str(row.get("unit_id") or "")
+        if sid:
+            self.supersede_units(sid, keep_id=uid)
+        self.data.setdefault("text_units", []).append(row)
+
     def _refresh_fcc_communities(self) -> None:
         by: Dict[str, List[Dict[str, Any]]] = {}
         for ent in self.data.get("entities") or []:

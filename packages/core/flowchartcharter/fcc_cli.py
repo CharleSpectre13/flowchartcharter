@@ -609,7 +609,7 @@ def cmd_library(
 @app.command("first-day")
 def cmd_first_day() -> None:
     """Seed the starter house, walk one job, print a stranger receipt."""
-    os.environ.setdefault("FCC_HARNESS_PERSIST", "0")
+    os.environ.setdefault("FCC_HARNESS_PERSIST", "1")
     from flowchartcharter.system import FlowChartCharterSystem
 
     out = FlowChartCharterSystem(seed=15).first_day()
@@ -628,12 +628,10 @@ def cmd_remember(
     note: str = typer.Argument(..., help="One drip of house memory"),
 ) -> None:
     """Save one note. No corpus required."""
-    os.environ.setdefault("FCC_HARNESS_PERSIST", "0")
-    from flowchartcharter.system import FlowChartCharterSystem
+    os.environ.setdefault("FCC_HARNESS_PERSIST", "1")
+    from flowchartcharter.house import dispatch
 
-    sys_ = FlowChartCharterSystem(seed=15)
-    sys_.first_day()
-    rec = sys_.remember(note)
+    rec = dispatch("remember", note)
     console.print_json(data=rec)
 
 

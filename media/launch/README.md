@@ -1,17 +1,20 @@
-# Launch film assets
+# Launch film — Open Source For The People
 
-Full video + voiceover live on the GitHub Release:
+30-second studio-entrance film. **Not** part of the house sandbox.
 
-**https://github.com/CharleSpectre13/flowchartcharter/releases/tag/v1.6.2-launch-film**
+| File | What |
+|---|---|
+| [FlowChartCharter_OpenSource_30s.mp4](FlowChartCharter_OpenSource_30s.mp4) | 1920×1080, 30.00s, H.264 + drone |
+| [spectre-stamp.jpg](spectre-stamp.jpg) | Spectre seal (logo-atelier) |
+| [endcard.png](endcard.png) | Typeset motto — letters are real |
+| [poster.jpg](poster.jpg) | Share frame |
 
-| Asset | Description |
-|-------|-------------|
-| [FlowChartCharter_Fear_Index_Launch.mp4](https://github.com/CharleSpectre13/flowchartcharter/releases/download/v1.6.2-launch-film/FlowChartCharter_Fear_Index_Launch.mp4) | 76s launch film with VO (1280×720) |
-| [FlowChartCharter_Launch_VO.mp3](https://github.com/CharleSpectre13/flowchartcharter/releases/download/v1.6.2-launch-film/FlowChartCharter_Launch_VO.mp3) | Narration track only |
-| [poster.jpg](https://github.com/CharleSpectre13/flowchartcharter/releases/download/v1.6.2-launch-film/poster.jpg) | Poster frame |
-| [VOICEOVER_SCRIPT.md](https://github.com/CharleSpectre13/flowchartcharter/releases/download/v1.6.2-launch-film/VOICEOVER_SCRIPT.md) | Full launch script |
+Motto: **OPEN SOURCE FOR THE PEOPLE**
+
+This is an original Spectre peak — not a Paramount logo.
 
 ```bash
-curl -L -o fcc-launch.mp4 \
-  https://github.com/CharleSpectre13/flowchartcharter/releases/download/v1.6.2-launch-film/FlowChartCharter_Fear_Index_Launch.mp4
+# Download
+curl -L -o FlowChartCharter_OpenSource_30s.mp4 \
+  https://github.com/CharleSpectre13/flowchartcharter/raw/main/media/launch/FlowChartCharter_OpenSource_30s.mp4
 ```

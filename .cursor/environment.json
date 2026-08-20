@@ -1,0 +1,11 @@
+{
+  "name": "FlowChartCharter",
+  "install": "pip install -e \".[dev]\"",
+  "terminals": [
+    {
+      "name": "api-server",
+      "command": "cd /workspace && FCC_HOST=0.0.0.0 FCC_PORT=8090 FCC_ADMIN_OPEN=1 FCC_LIVE_WIRE=1 FCC_LLM_PROVIDER=mock python3 -m flowchartcharter"
+    }
+  ],
+  "ports": [8090]
+}

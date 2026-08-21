@@ -50,7 +50,7 @@ def audit(repo_name: str, completed: str, excellent: list, weak: list, adjustmen
 - SPEC six elements present: {(ROOT / 'spec' / 'SPEC.md').exists()}
 
 ## Verdict
-{"HALT" if blocking else "PASS — proceed to create repository"}
+{\"HALT\" if blocking else \"PASS — proceed to create repository\"}
 """
     path.write_text(body)
     print(path)

@@ -1,0 +1,9 @@
+{
+  "name": "flowchartcharter-studio",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "echo 'Use the monorepo App Builder workspace or wire TanStack Start Vite config'",
+    "typecheck": "tsc --noEmit"
+  }
+}

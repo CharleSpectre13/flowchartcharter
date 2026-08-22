@@ -6,6 +6,8 @@ Map (YAML Charter) + Car (harness) + House (durable notebook) + optional Grok mo
 No paid keys required for the core path.  
 Apache-2.0 · open design · offline-first.
 
+> **For people:** Accountable house — YAML Charter + harness (Halt, Earned Rhythm) + durable notebook. Optional Grok. No key required. Apache-2.0.
+
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/core-v3.4.1-informational.svg)](packages/core)
 [![CI](https://img.shields.io/badge/CI-Continuous%20Audit%20Loop-purple.svg)](.github/workflows/audit.yml)

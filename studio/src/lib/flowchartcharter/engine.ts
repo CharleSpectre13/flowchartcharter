@@ -248,7 +248,7 @@ export function createRoster(): Agent[] {
       muscleMemory: { path_A: 1.0, path_B: 1.2, path_lite: 0.9 },
       corporateRank: 1,
       load: 0,
-      capability: { validation: 1, generic: 0.5 },
+      capability: { validation: 1, general: 0.5 },
       talentEligible: true,
       layer: "ops",
     },
@@ -261,7 +261,7 @@ export function createRoster(): Agent[] {
       muscleMemory: { path_A: 1.5, path_B: 0.7, path_lite: 1.0 },
       corporateRank: 2,
       load: 0,
-      capability: { synthesis: 1, generic: 0.6 },
+      capability: { synthesis: 1, general: 0.6 },
       talentEligible: true,
       layer: "ops",
     },
@@ -274,7 +274,7 @@ export function createRoster(): Agent[] {
       muscleMemory: { path_A: 1, path_B: 1, path_lite: 1 },
       corporateRank: 4,
       load: 0,
-      capability: { audit: 1, generic: 0.4 },
+      capability: { audit: 1, general: 0.4 },
       talentEligible: false,
       layer: "audit",
     },
@@ -454,7 +454,6 @@ export function runCharter(
     notes: trust ? "hand-off approved" : "hand-off withheld",
   });
 
-  // Q_s mean — schema clean in studio demo → D≈0
   const qsMean = synergyQs(0);
   const meanPreEntropy =
     collapses.length > 0

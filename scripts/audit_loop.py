@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -35,6 +36,8 @@ DEFAULT_TARGETS = [
     str(PKG / "system.py"),
     str(PKG / "elastic.py"),
     str(PKG / "reference_engine.py"),
+    str(PKG / "system_audit.py"),
+    str(PKG / "harness.py"),
 ]
 
 
@@ -107,8 +110,7 @@ def main() -> int:
             cwd=str(ROOT),
             capture_output=True,
             text=True,
-            env={**dict(**{k: v for k, v in __import__("os").environ.items()}),
-                 "PYTHONPATH": env_pythonpath},
+            env={**dict(os.environ), "PYTHONPATH": env_pythonpath},
         )
         tail = ((p.stdout or "") + (p.stderr or "")).strip().splitlines()
         results.append(
@@ -116,7 +118,7 @@ def main() -> int:
         )
 
     passed = all(c == 0 for _, c, _ in results)
-    ts = dt.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    ts = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     REPORTS.mkdir(parents=True, exist_ok=True)
     report_path = REPORTS / f"CXR-{ts}-audit-loop.md"
 

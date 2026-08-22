@@ -214,6 +214,7 @@ from .execution_sandbox import ExecutionSandbox, SandboxPolicy
 from .durable_notebook import DurableNotebook
 from .kill_law import bind as bind_kill_law
 from .kill_law import refuse_side_effect
+from .system_audit import run_system_audit, format_audit_report
 
 from .charter_synthesizer import (
     CharterSynthesizer,

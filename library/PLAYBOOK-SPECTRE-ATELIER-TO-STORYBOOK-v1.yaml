@@ -1,0 +1,23 @@
+# House playbook ingest wrapper — fail-closed if body missing
+# Source (do not delete): /workspace/ops/flowchart/ingest/house/playbooks/PLAYBOOK-SPECTRE-ATELIER-TO-STORYBOOK-v1.md
+playbook_name: "PLAYBOOK-SPECTRE-ATELIER-TO-STORYBOOK-v1"
+version: "1.0.0"
+house_source: "ingest/house/playbooks/PLAYBOOK-SPECTRE-ATELIER-TO-STORYBOOK-v1.md"
+global_cfo_ceiling: 0
+halt:
+  - invent_content
+  - spend
+  - merge_without_sit
+roster_requisition:
+  - role: "Playbook_Reader"
+    capabilities: ["read_md", "charter_path"]
+flow_units:
+  - id: "U1_Load_House_MD"
+    description: "Load house markdown playbook body; do not invent steps."
+    assigned_role: "Playbook_Reader"
+    expected_tokens: 400
+    expected_latency_ms: 100.0
+    schema:
+      path: "string"
+      exists: "bool"
+      halt_if_missing: "bool"

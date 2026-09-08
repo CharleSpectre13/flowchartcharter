@@ -89,7 +89,12 @@
 - [x] `library/secops_vulnerability_audit.yaml` exists (box + branch)
 - [x] House playbooks copied + YAML wrappers in library/
 - [x] Charter / rhythm / locks / exec comms ingested under ingest/house/
-- [ ] PR open (cloud agent bc-4d8e489c) — sit; no merge
+- [x] PR open: https://github.com/CharleSpectre13/flowchartcharter/pull/3 — sit; **no merge**
+- Cloud agent: `bc-4d8e489c` (may append; do not fight)
+
+## PR
+https://github.com/CharleSpectre13/flowchartcharter/pull/3
+Branch: `cursor/flowchart-ingest-2026-09-08`
 
 ## Halt / out of scope
 - No invent content beyond fail-closed wrappers
